@@ -1,6 +1,8 @@
 """The Anthropic runner through troupe's own host, against a stand-in service serving the plugin's
 fixtures (spec: anthropic-runner, "Fixtures pair service output with protocol events", "A service's
-echo of the credential is masked"; runner-protocol; actor-runners; anthropic-runner design D14)."""
+echo of the credential is masked"; runner-protocol; actor-runners; anthropic-runner design D14).
+
+Its tests that stay in their own process are in unit/test_anthropic_host_unit.py."""
 
 import asyncio
 import uuid
@@ -95,17 +97,3 @@ def test_the_stored_transcript_of_a_rejected_key_holds_the_services_message_and_
     stored = store.read(outcome.transcript).decode("utf-8")
     assert "invalid x-api-key" in stored
     assert anthropic_stand_in.CANARY not in stored
-
-
-def test_the_three_copies_of_the_test_limits_agree() -> None:
-    import importlib.util
-
-    import test_anthropic_live
-
-    harness = anthropic_stand_in.PLUGIN / "tests" / "anthropic_harness.py"
-    spec = importlib.util.spec_from_file_location("anthropic_harness_for_limits", harness)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    assert anthropic_stand_in.TEST_LIMITS == module.TEST_LIMITS == test_anthropic_live.TEST_LIMITS

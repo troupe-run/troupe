@@ -14,8 +14,8 @@ from typing import Any
 
 import pytest
 
+from mistralrs_fixtures_shared import CASES, FIXTURES, _capture, _filled, _load
 from stand_in import StandIn
-from test_mistralrs_fixtures import CASES, FIXTURES, _capture, _filled, _load
 
 MODEL = "Qwen3-0.6B-Q8_0.gguf"
 REWRITTEN = ("run.json", "responses.json", "engine.json", "expected.json")

@@ -20,6 +20,7 @@ from typing import Any
 
 import pytest
 
+from anthropic_live_shared import TEST_LIMITS
 from runner_schemas import validate
 from troupe.core.artifacts import MemoryArtifactStore
 from troupe.core.audition import ANTHROPIC_AUDITION_MODEL
@@ -35,8 +36,6 @@ ENDPOINT = "TROUPE_LIVE_ANTHROPIC_ENDPOINT"
 MODEL = "TROUPE_LIVE_ANTHROPIC_MODEL"
 KEY = "ANTHROPIC_API_KEY"
 CLAUDES_API = "https://api.anthropic.com"
-TEST_LIMITS = {"maxTurns": 5, "maxTotalTokens": 20_000}
-"""The plugin's test limits: a few cents on Claude's API."""
 DIRECTION = (
     "Use the Write tool to create out/hello.txt containing exactly: hello\n"
     "Then use the Read tool to read it back, and reply with what it holds."

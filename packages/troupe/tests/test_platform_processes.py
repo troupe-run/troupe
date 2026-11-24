@@ -1,11 +1,11 @@
-"""Tests for child processes (spec: platform)."""
+"""Tests for child processes (spec: platform).
+
+Its tests that stay in their own process are in unit/test_platform_processes_unit.py."""
 
 import asyncio
 import contextlib
-import errno
 import json
 import os
-import re
 import shutil
 import statistics
 import subprocess
@@ -14,24 +14,23 @@ import threading
 import time
 import types
 import typing
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from hypothesis import example, given
-from hypothesis import strategies as st
 
+from platform_processes_shared import (
+    LIMIT,
+    WINDOWS,
+    _exit_of,
+    _precondition,
+)
 from troupe.platform import processes
 from troupe.platform.errors import (
-    CommandNotFoundError,
     LineTooLongError,
     OutputTooLargeError,
-    ProcessStateUnknownError,
     ProcessTimeoutError,
 )
-
-WINDOWS = sys.platform == "win32"
-LIMIT = 8 * 1024 * 1024
 
 ADDED_BY_THE_INTERPRETER = {"LC_CTYPE", "__CF_USER_TEXT_ENCODING", "__PYVENV_LAUNCHER__"}
 """Variables a Python child sets in its own environment at start-up (locale coercion, macOS
@@ -82,22 +81,6 @@ def test_a_python_child_starts_and_runs_with_no_named_variables() -> None:
     assert set(seen) - set(processes.MINIMUM_ENVIRONMENT) <= ADDED_BY_THE_INTERPRETER
     if WINDOWS:
         assert "SYSTEMROOT" in seen
-
-
-def test_a_missing_command_is_reported_by_name() -> None:
-    async def main() -> None:
-        await processes.start(["troupe-no-such-runner"], cwd=Path.cwd(), env={}, line_limit=LIMIT)
-
-    with pytest.raises(CommandNotFoundError) as caught:
-        asyncio.run(main())
-    assert caught.value.command == "troupe-no-such-runner"
-
-
-def test_the_command_is_found_on_the_given_search_path(tmp_path: Path) -> None:
-    found = processes.resolve_command(Path(sys.executable).name, str(Path(sys.executable).parent))
-    assert Path(found).is_absolute()
-    with pytest.raises(CommandNotFoundError):
-        processes.resolve_command(Path(sys.executable).name, str(tmp_path))
 
 
 # Requirement: Killing a child kills its whole process tree
@@ -271,128 +254,6 @@ while not os.path.exists(sys.argv[1]):
 """A child that says it's running, then exits 0 once the file named by its argument exists, or 3
 if it hasn't appeared within 10 s. It exits when the test says, not after a sleep. Its 10 s sits
 well inside EXIT_BOUND_SECONDS, so a child that's never told ends with its own code first."""
-
-
-EXIT_BOUND_SECONDS = 30.0
-"""How long the race test waits for its child to exit at the OS level before it fails."""
-
-
-def _precondition(problem: str) -> typing.NoReturn:
-    """Fail the race test because the race it needs wasn't set up, which says nothing about the
-    seam. The prefix keeps it from being read as a wrong answer about the kill."""
-    pytest.fail(f"precondition not reached: {problem}", pytrace=False)
-
-
-def _not_exited(pid: int) -> typing.NoReturn:
-    _precondition(f"the child ({pid}) did not exit within {EXIT_BOUND_SECONDS} s of being told to")
-
-
-# Each _exit_of watches one child's exit at the OS level, without the seam under test, and yields
-# a wait that returns the exit status the OS recorded, or None where asyncio's watcher has already
-# taken it. Nothing in it yields to the event loop, so asyncio can't record the exit meanwhile.
-if sys.platform == "win32":
-    import ctypes
-    from ctypes import wintypes
-
-    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    _kernel32.OpenProcess.restype = wintypes.HANDLE
-    _kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
-    _kernel32.WaitForSingleObject.restype = wintypes.DWORD
-    _kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
-    _kernel32.GetExitCodeProcess.restype = wintypes.BOOL
-    _kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
-    _kernel32.CloseHandle.restype = wintypes.BOOL
-    _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
-    _SYNCHRONIZE = 0x00100000
-    _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-    _WAIT_OBJECT_0 = 0
-    _WAIT_TIMEOUT = 0x102
-
-    def _windows_error(doing: str) -> typing.NoReturn:
-        _precondition(f"{doing} failed: {ctypes.WinError(ctypes.get_last_error())}")
-
-    @contextlib.contextmanager
-    def _exit_of(pid: int) -> Iterator[Callable[[], int | None]]:
-        """A handle opened now, while the child runs, pins that process, so a reused pid can't
-        stand in for it. Waiting on it is one answer: exited, or not within the bound."""
-        handle = _kernel32.OpenProcess(
-            _SYNCHRONIZE | _PROCESS_QUERY_LIMITED_INFORMATION, False, pid
-        )
-        if not handle:
-            _windows_error(f"opening the child ({pid}) to watch its exit")
-
-        def wait() -> int | None:
-            waited = _kernel32.WaitForSingleObject(handle, int(EXIT_BOUND_SECONDS * 1000))
-            if waited == _WAIT_TIMEOUT:
-                _not_exited(pid)
-            if waited != _WAIT_OBJECT_0:
-                _windows_error(f"waiting for the child ({pid}) to exit")
-            code = wintypes.DWORD()
-            if not _kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
-                _windows_error(f"reading the child's ({pid}) exit code")
-            return int(code.value)
-
-        try:
-            yield wait
-        finally:
-            _kernel32.CloseHandle(handle)
-
-elif hasattr(os, "waitid"):
-    # Chosen by what os offers, not the platform: who reaps the child depends on the Python
-    # version (python-3-14-3-15 design D2). Linux's pidfd watcher, and the threaded watcher on
-    # macOS from 3.14, reap on the loop, so a blocked loop leaves a zombie whose status waitid
-    # reads. On macOS 3.13 the watcher thread reaps, and waitid says so with ChildProcessError.
-
-    class _Waited(typing.Protocol):
-        si_code: int
-        si_status: int
-
-    # typeshed declares waitid for Linux only, but macOS has it from Python 3.13.
-    _waitid = typing.cast(
-        Callable[[int, int, int], _Waited | None],
-        getattr(os, "waitid"),  # noqa: B009
-    )
-
-    @contextlib.contextmanager
-    def _exit_of(pid: int) -> Iterator[Callable[[], int | None]]:
-        """waitid without reaping, polled to the bound: the status is there to read until the
-        loop reaps, unless a watcher thread already has."""
-
-        def wait() -> int | None:
-            deadline = time.monotonic() + EXIT_BOUND_SECONDS
-            while True:
-                try:
-                    seen = _waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT | os.WNOHANG)
-                except ChildProcessError:
-                    return None  # a watcher thread reaped it, which only an exit allows
-                if seen is not None:
-                    return seen.si_status if seen.si_code == os.CLD_EXITED else -seen.si_status
-                if time.monotonic() >= deadline:
-                    _not_exited(pid)
-                time.sleep(0.01)
-
-        yield wait
-
-else:
-    # No waitid: macOS on 3.12, where asyncio's watcher thread reaps the child itself.
-
-    @contextlib.contextmanager
-    def _exit_of(pid: int) -> Iterator[Callable[[], int | None]]:
-        """asyncio's watcher thread reaps the child but can only schedule its returncode on the
-        blocked loop, so the pid disappearing proves the exit. The status went to asyncio."""
-
-        def wait() -> int | None:
-            deadline = time.monotonic() + EXIT_BOUND_SECONDS
-            while True:
-                try:
-                    os.kill(pid, 0)
-                except ProcessLookupError:
-                    return None
-                if time.monotonic() >= deadline:
-                    _not_exited(pid)
-                time.sleep(0.01)
-
-        yield wait
 
 
 def test_a_kill_sent_after_the_child_exited_but_before_asyncio_saw_it_did_not_end_it(
@@ -960,18 +821,6 @@ def test_the_time_after_the_end_tells_a_20_ms_tick_put_back(
     )
 
 
-def test_running_a_missing_command_names_it() -> None:
-    with pytest.raises(CommandNotFoundError):
-        processes.run_to_completion(
-            ["troupe-no-such-command"],
-            cwd=Path.cwd(),
-            env={},
-            timeout=5,
-            max_output_bytes=1024,
-            announce_after=5,
-        )
-
-
 # Requirement: Whether a process has ended has one meaning on every platform
 
 SLEEP_A_MINUTE = "import time; time.sleep(60)"
@@ -999,15 +848,6 @@ def test_a_child_that_has_exited_and_been_waited_for_reads_as_ended() -> None:
 STILL_ACTIVE = 259
 """The exit code Windows reports for a running process. A process can also exit with it."""
 
-SYSTEM_PID = 4
-"""The Windows System process: always running, and protected from most callers."""
-
-
-@pytest.mark.skipif(not WINDOWS, reason="pid 4 is the System process only on Windows")
-def test_the_windows_system_process_reads_as_running() -> None:
-    assert processes.is_running(SYSTEM_PID)
-
-
 DENY_EVERYONE_THEN_SLEEP = """
 import ctypes, os, sys, time
 from ctypes import wintypes
@@ -1031,7 +871,6 @@ time.sleep(60)
 """A child that gives its own process an empty DACL, so opening it is refused to everyone not
 holding an enabled SeDebugPrivilege, administrators included. It prints its own pid, because a
 venv's python.exe on Windows is a launcher that runs the interpreter as a child of its own."""
-
 
 ASK_WITHOUT_DEBUG_PRIVILEGE = """
 import ctypes, json, sys
@@ -1139,27 +978,6 @@ def _wait_until_exited_while_held(child: "subprocess.Popen[bytes]") -> None:
     assert _winapi.WaitForSingleObject(handle, 30_000) == _winapi.WAIT_OBJECT_0
 
 
-def _may_signal_pid_1() -> bool:
-    """Whether the OS lets us signal pid 1: as root, or in a container whose init runs as us."""
-    try:
-        os.kill(1, 0)
-    except PermissionError:
-        return False
-    return True
-
-
-@pytest.mark.skipif(WINDOWS, reason="pid 1 is init only on Linux and macOS")
-@pytest.mark.skipif(
-    not WINDOWS and _may_signal_pid_1(),
-    reason="we may signal pid 1 here (root, or a container's init running as us), so the OS's "
-    "refusal, which this test is about, never happens",
-)
-def test_pid_1_which_the_os_refuses_to_let_us_signal_reads_as_running() -> None:
-    with pytest.raises(PermissionError):
-        os.kill(1, 0)  # the refusal this test depends on
-    assert processes.is_running(1)
-
-
 @pytest.mark.skipif(WINDOWS, reason="a zombie is a Linux and macOS state")
 def test_an_unreaped_child_still_reads_as_running_on_posix_the_documented_limit() -> None:
     child = subprocess.Popen(_python("pass"))
@@ -1185,123 +1003,6 @@ def _wait_until_zombie(pid: int) -> None:
     raise AssertionError(f"process {pid} didn't become a zombie within 10s")
 
 
-def test_the_unknown_state_error_names_the_pid_the_os_text_and_the_code() -> None:
-    error = ProcessStateUnknownError(4321, 22, "Invalid argument")
-    assert str(error) == "can't tell whether process 4321 has ended: Invalid argument (error 22)"
-    assert (error.pid, error.code, error.text) == (4321, 22, "Invalid argument")
-
-
-def _os_error(code: int) -> OSError:
-    return OSError(code, os.strerror(code))
-
-
-@pytest.mark.parametrize(
-    ("error", "running"),
-    [(None, True), (_os_error(errno.EPERM), True), (_os_error(errno.ESRCH), False)],
-    ids=["signalled", "refused", "no-such-process"],
-)
-def test_the_posix_table_reads_success_and_refusal_as_running_and_no_such_process_as_ended(
-    error: OSError | None, running: bool
-) -> None:
-    assert processes._posix_outcome(1234, error) is running
-
-
-@given(
-    st.integers(min_value=1, max_value=4096).filter(lambda c: c not in {errno.EPERM, errno.ESRCH})
-)
-def test_any_other_posix_error_is_an_unknown_state_naming_the_pid_and_the_code(code: int) -> None:
-    with pytest.raises(ProcessStateUnknownError) as caught:
-        processes._posix_outcome(1234, OSError(code, "some failure"))
-    assert (caught.value.pid, caught.value.code, caught.value.text) == (1234, code, "some failure")
-
-
-@pytest.mark.parametrize(
-    ("open_error", "wait_result", "running"),
-    [
-        (87, None, False),  # ERROR_INVALID_PARAMETER: no such process
-        (5, None, True),  # ERROR_ACCESS_DENIED: it exists
-        (None, 0x0, False),  # WAIT_OBJECT_0: the handle is signalled, it has exited
-        (None, 0x102, True),  # WAIT_TIMEOUT: not signalled, still running
-    ],
-    ids=["no-such-process", "access-denied", "signalled", "not-signalled"],
-)
-def test_the_windows_table_reads_each_known_answer(
-    open_error: int | None, wait_result: int | None, running: bool
-) -> None:
-    outcome = processes._windows_outcome(
-        1234, open_error=open_error, wait_result=wait_result, wait_error=None
-    )
-    assert outcome is running
-
-
-@given(st.integers(min_value=0, max_value=0xFFFFFFFF).filter(lambda c: c not in {5, 87}))
-@example(2**31)  # FormatError takes a C long: found by this property on Windows CI
-def test_any_other_windows_open_error_is_an_unknown_state_naming_the_pid_and_the_code(
-    code: int,
-) -> None:
-    with pytest.raises(ProcessStateUnknownError) as caught:
-        processes._windows_outcome(1234, open_error=code, wait_result=None, wait_error=None)
-    assert (caught.value.pid, caught.value.code) == (1234, code)
-
-
-def test_a_failed_windows_wait_is_an_unknown_state_carrying_the_wait_error() -> None:
-    with pytest.raises(ProcessStateUnknownError) as caught:
-        processes._windows_outcome(1234, open_error=None, wait_result=0xFFFFFFFF, wait_error=6)
-    assert (caught.value.pid, caught.value.code) == (1234, 6)
-    assert caught.value.text.startswith("waiting on the process failed: ")
-
-
-@given(
-    st.integers(min_value=0, max_value=0xFFFFFFFF).filter(
-        lambda r: r not in {0x0, 0x102, 0xFFFFFFFF}
-    )
-)
-def test_any_other_windows_wait_result_is_an_unknown_state_naming_it(result: int) -> None:
-    with pytest.raises(ProcessStateUnknownError) as caught:
-        processes._windows_outcome(1234, open_error=None, wait_result=result, wait_error=None)
-    assert caught.value.pid == 1234
-    assert caught.value.text == f"waiting on the process returned {result!r}"
-
-
-NOT_A_PID = [0, -1, processes.PID_MAX + 1, True]
-
-
-@pytest.fixture
-def no_os_query(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Fail the test if is_running reaches the OS."""
-
-    def reached(*_: object) -> typing.NoReturn:
-        raise AssertionError("is_running asked the OS about a value that isn't a pid")
-
-    if sys.platform == "win32":
-        monkeypatch.setattr(processes._kernel32, "OpenProcess", reached)
-    else:
-        monkeypatch.setattr(os, "kill", reached)
-
-
-@pytest.mark.usefixtures("no_os_query")
-@pytest.mark.parametrize("value", NOT_A_PID, ids=repr)
-def test_a_value_that_cant_name_one_process_is_refused_naming_it_without_asking_the_os(
-    value: int,
-) -> None:
-    with pytest.raises(ValueError, match=re.escape(f"{value!r} isn't a process id")):
-        processes.is_running(value)
-
-
-@pytest.mark.skipif(WINDOWS, reason="kill(pid, 0) is how Linux and macOS ask")
-def test_an_os_error_that_isnt_a_refusal_or_no_such_process_fails_naming_the_pid_and_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def fails(pid: int, signal: int) -> None:
-        raise OSError(errno.EINVAL, os.strerror(errno.EINVAL))
-
-    monkeypatch.setattr(os, "kill", fails)
-    with pytest.raises(ProcessStateUnknownError) as caught:
-        processes.is_running(1234)
-    assert (caught.value.pid, caught.value.code) == (1234, errno.EINVAL)
-    assert str(caught.value).startswith("can't tell whether process 1234 has ended: ")
-
-
 # Requirement: A process id's namespace can be named
 
 
@@ -1311,48 +1012,3 @@ def test_a_child_gets_the_same_namespace_token_as_its_parent() -> None:
     code = "from troupe.platform.processes import namespace_token; print(namespace_token())"
     done = subprocess.run(_python(code), capture_output=True, text=True, timeout=60, check=True)
     assert done.stdout.rstrip("\n") == token
-
-
-def test_a_namespace_token_read_twice_is_the_same() -> None:
-    first = processes.namespace_token()
-    time.sleep(0.2)
-    assert processes.namespace_token() == first
-
-
-def test_the_namespace_token_holds_what_names_the_namespace_on_this_os() -> None:
-    import socket
-
-    token = processes.namespace_token()
-    assert token is not None
-    assert "\n" not in token
-    if sys.platform == "linux":
-        boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
-        assert boot_id in token
-        assert os.readlink("/proc/self/ns/pid") in token
-    else:
-        assert socket.gethostname() in token
-
-
-@pytest.mark.parametrize(
-    "error",
-    [OSError(errno.EACCES, "refused"), UnicodeDecodeError("ascii", b"\xff", 0, 1, "not ascii")],
-    ids=["os-error", "undecodable"],
-)
-def test_a_namespace_the_os_cant_name_gives_no_token(
-    monkeypatch: pytest.MonkeyPatch, error: Exception
-) -> None:
-    def failing() -> tuple[str, ...]:
-        raise error
-
-    monkeypatch.setattr(processes, "_namespace_parts", failing)
-    assert processes.namespace_token() is None
-
-
-@pytest.mark.parametrize(
-    "parts", [(), ("linux", ""), ("linux", "a\nb")], ids=["none", "empty", "two-lines"]
-)
-def test_a_namespace_part_that_cant_be_one_line_gives_no_token(
-    monkeypatch: pytest.MonkeyPatch, parts: tuple[str, ...]
-) -> None:
-    monkeypatch.setattr(processes, "_namespace_parts", lambda: parts)
-    assert processes.namespace_token() is None

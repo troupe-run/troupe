@@ -1,7 +1,10 @@
-"""The Ollama fixtures: real Ollama output, replayed through the runner, gives exactly the records
-and events they hold; each says where it came from; none holds a secret or a host path (spec:
-ollama-runner, "Fixtures pair real Ollama output with protocol events"; local-model-runner design
-D12)."""
+"""The Ollama fixtures, read from their files: there is one for each shape, each named case holds
+what Ollama sent and the outcome it should give, each records its Ollama version, model, date and
+how it was made, and none holds a secret or a host path (spec: ollama-runner, "Fixtures pair real
+Ollama output with protocol events"; local-model-runner design D12).
+
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_ollama_fixtures_integration.py."""
 
 import json
 import re
@@ -9,17 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from fixture_replay import fixture_records, load, names, replay
+from fixture_replay import fixture_records, load, names
 from ollama_harness import FIXTURES
 from troupe_plugin_sdk.compaction import stub
-
-REFUSALS = {
-    "model-not-found": "ollama.model-not-found",
-    "no-tools-capability": "ollama.model-without-tools",
-}
-"""The fixtures whose run the preflight refuses, and the code it refuses them with."""
-
-RUNS = [name for name in names() if name not in REFUSALS]
 
 SECRET_PATTERNS = {
     "bearer credential": re.compile(r"Bearer\s+\S"),
@@ -61,23 +56,6 @@ def test_there_are_fixtures_for_each_shape() -> None:
         "network-retries",
         "stream-error",
     }
-
-
-@pytest.mark.parametrize("name", RUNS)
-def test_replaying_a_fixture_gives_exactly_its_records_and_events(
-    name: str, tmp_path: Path
-) -> None:
-    replayed = replay(name, tmp_path)
-    assert replayed.refused is None
-    assert replayed.records == fixture_records(name)
-    assert replayed.events == load(name, "events.json")
-
-
-@pytest.mark.parametrize("name", sorted(REFUSALS))
-def test_a_preflight_fixture_is_refused_with_its_code(name: str, tmp_path: Path) -> None:
-    replayed = replay(name, tmp_path)
-    assert replayed.refused is not None
-    assert replayed.refused["code"] == REFUSALS[name]
 
 
 def test_the_context_overflow_fixture_is_ollamas_refusal_naming_the_window() -> None:

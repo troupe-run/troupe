@@ -6,7 +6,8 @@ refused"; config-path-dotted-keys design D3, D4).
 No config key can hold a dot until model prices exist (#292): actor and runtime names can't. So a
 dotted key reaches the core here as a name it refuses, and the error's ``details.path`` shows what
 the command read.
-"""
+
+Its tests that stay in their own process are in unit/test_cli_config_paths_unit.py."""
 
 import io
 import json
@@ -15,11 +16,11 @@ from typing import Any
 
 import pytest
 
+from cli_config_paths_shared import PRICE
 from gitrepo import Repo
 from protocol_schemas import check_error
 from runtesting import ADA, theatre
 from storetesting import git_service
-from troupe.cli import config as cli_config
 from troupe.cli import main
 from troupe.cli.commands import _call
 from troupe.cli.render import render_error
@@ -27,7 +28,6 @@ from troupe.core.config import aggregate
 from troupe.core.errors import TroupeError
 
 STEPS = '[{"exit": 0}]'
-PRICE = ["runtimes", "openai", "prices", "gpt-4.1", "input"]
 
 
 class Seen:
@@ -188,26 +188,6 @@ def test_a_plain_key_set_in_brackets_is_shown_plain(repo: Repo) -> None:
         "set actors.tester.expect",
         "set actors.tester.options.script.steps",
         "set actors.tester.runner",
-    ]
-
-
-def test_an_entry_at_a_key_that_holds_a_dot_is_shown_in_brackets() -> None:
-    shown = io.StringIO()
-    cli_config._render_change(
-        {"entries": [{"path": PRICE, "after": 2}, {"path": PRICE[:4]}], "files": [], "notices": []},
-        shown,
-        rehearse=False,
-    )
-    assert shown.getvalue().splitlines() == [
-        "set runtimes.openai.prices[gpt-4.1].input",
-        "unset runtimes.openai.prices[gpt-4.1]",
-    ]
-
-
-def test_a_conflict_at_a_key_that_holds_a_dot_is_shown_in_brackets() -> None:
-    lines = cli_config._conflict_lines({"paths": [PRICE], "changes": []})
-    assert lines == [
-        "conflict at runtimes.openai.prices[gpt-4.1].input: these changes set it differently"
     ]
 
 

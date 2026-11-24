@@ -1,8 +1,9 @@
 """The runner as troupe runs it: a process speaking the contract over standard input and output,
 against the fake Messages API (spec: anthropic-runner; design D4, D6, D9, D11). Every run uses
-TEST_LIMITS unless a test says why not."""
+TEST_LIMITS unless a test says why not.
 
-import io
+Its tests that stay in their own process are in unit/test_anthropic_runner_unit.py."""
+
 import json
 import threading
 import time
@@ -28,7 +29,6 @@ from fake_messages import (
 )
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.tools import Tools
-from troupe_runner_anthropic.runner import Runner
 
 MASKED_ECHO = "sk-ant-ca*********6789"
 """How a 401 may quote the canary with part of it hidden."""
@@ -590,20 +590,6 @@ def test_importing_the_runner_doesnt_import_the_library_so_the_handshake_isnt_ke
 
     done = subprocess.run([sys.executable, "-c", code], capture_output=True, check=False)
     assert done.returncode == 0, done.stderr.decode()[-2000:]
-
-
-# Requirement: A message's strings are Unicode text (host-robustness design D3)
-
-
-def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character() -> None:
-    # An engine's \ud800 escape decodes to a lone surrogate, which the host refuses (#311).
-    stdout, stderr = io.BytesIO(), io.BytesIO()
-    writer = Runner(io.BytesIO(), stdout, stderr)
-    writer._write({"jsonrpc": "2.0", "method": "run/event", "params": {"x\udfff": "a\ud800b"}})
-    message = json.loads(stdout.getvalue())
-    assert message["params"] == {"x\ufffd": "a\ufffdb"}
-    assert p.lone_surrogate(message) is None
-    assert b"2 lone surrogates in a run/event message were written as U+FFFD" in stderr.getvalue()
 
 
 # Requirement: A second initialize is refused (host-robustness design D4, #356)

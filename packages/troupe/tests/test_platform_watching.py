@@ -1,141 +1,26 @@
-"""Watching a directory (platform/watching.py; spec: platform; watch-event-segments design D2, D7).
+"""Watching a directory, with every change made in this process (platform/watching.py; spec:
+platform; watch-event-segments design D2, D7). A wait with nothing changing returns after its
+timeout, even when the platform gives up early, closing a watch wakes a wait in another thread at
+once, and removing the watched directory wakes a wait and the next one names it missing. Watching
+a missing directory, a file, or a directory the OS call refuses fails naming the directory and
+the reason.
 
-Another process makes each change: watch_child.py, which prints the wall-clock time the moment its
-change returned. Delays are measured from then, by the wall clock, because time.monotonic()'s
-reference point is undefined across processes.
-"""
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_platform_watching_integration.py."""
 
 import errno
-import statistics
-import subprocess
 import sys
 import threading
 import time
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
-from storetesting import BOUND, SETTLE, SLOW_STRETCH_SECONDS, STALL_SECONDS, WITHIN, watched_delays
+from platform_watching_shared import drain, settled
+from storetesting import BOUND, SLOW_STRETCH_SECONDS, WITHIN
 from troupe.platform import watching
 from troupe.platform.errors import WatchDirectoryMissingError, WatchUnavailableError
 from troupe.platform.watching import DirectoryWatch, watch
-
-CHILD = Path(__file__).with_name("watch_child.py")
-
-
-class Changer:
-    """watch_child.py, changing files on command."""
-
-    def __init__(self) -> None:
-        self.process = subprocess.Popen(
-            [sys.executable, str(CHILD)],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            text=True,
-        )
-
-    def send(self, command: str, path: Path) -> None:
-        assert self.process.stdin is not None
-        self.process.stdin.write(f"{command} {path}\n")
-        self.process.stdin.flush()
-
-    def done_at(self) -> float:
-        assert self.process.stdout is not None
-        line = self.process.stdout.readline()
-        assert line.startswith("DONE "), line
-        return float(line.split()[1])
-
-    def close(self) -> None:
-        assert self.process.stdin is not None
-        self.process.stdin.close()
-        assert self.process.wait(timeout=30) == 0
-
-
-@pytest.fixture
-def changer() -> Iterator[Changer]:
-    child = Changer()
-    yield child
-    child.close()
-
-
-def drain(watched: DirectoryWatch, quiet: float = 0.2) -> None:
-    """Wait until ``watched`` has reported nothing for ``quiet`` seconds. One change can be
-    reported as more than one wake."""
-    while watched.wait(quiet):
-        pass
-
-
-def settled(directory: Path) -> DirectoryWatch:
-    """A watch on ``directory`` with its spurious first wakes used up."""
-    watched = watch(directory)
-    drain(watched, SETTLE)
-    return watched
-
-
-def test_another_processs_appends_each_wake_a_wait_the_fastest_under_the_bound(
-    tmp_path: Path, changer: Changer
-) -> None:
-    segment = tmp_path / "segment.jsonl"
-    segment.write_bytes(b"")
-    with settled(tmp_path) as watched:
-
-        def measure() -> float:
-            changer.send("append", segment)
-            assert watched.wait(WITHIN)
-            woke = time.time()
-            delay = woke - changer.done_at()
-            drain(watched)
-            return delay
-
-        delays = watched_delays(measure)
-    assert min(delays) < BOUND, delays
-    assert statistics.median(delays[:5]) < BOUND + STALL_SECONDS, delays
-
-
-def test_another_processs_new_file_wakes_a_wait(tmp_path: Path, changer: Changer) -> None:
-    with settled(tmp_path) as watched:
-        changer.send("create", tmp_path / "new.jsonl")
-        assert watched.wait(WITHIN)
-        changer.done_at()
-
-
-def test_another_processs_removing_a_file_wakes_a_wait(tmp_path: Path, changer: Changer) -> None:
-    doomed = tmp_path / "doomed.jsonl"
-    doomed.write_bytes(b"x\n")
-    with settled(tmp_path) as watched:
-        changer.send("remove", doomed)
-        assert watched.wait(WITHIN)
-        changer.done_at()
-
-
-def test_a_change_made_while_nobody_waits_is_reported_by_the_next_wait_at_once(
-    tmp_path: Path, changer: Changer
-) -> None:
-    # "At once" is checked with a zero timeout, not a clock, so a stalled thread can't fail it
-    # (#446, load-flakes design D2). Load can still make the OS deliver the change after the quiet
-    # half second; then a wait with a timeout must still report it, and the next change is tried,
-    # until one is reported with no waiting or the slow stretch's budget is spent. A wait that
-    # blocks on a pending change, or that only notices changes while someone waits, fails every try.
-    segment = tmp_path / "segment.jsonl"
-    segment.write_bytes(b"")
-    with settled(tmp_path) as watched:
-
-        def reported_without_waiting() -> bool:
-            changer.send("append", segment)
-            changer.done_at()
-            time.sleep(0.5)  # the change is made, and delivered, while nobody waits
-            at_once = watched.wait(0)
-            if not at_once:
-                assert watched.wait(WITHIN), "a change made while nobody waited was lost"
-            drain(watched)
-            return at_once
-
-        started = time.monotonic()
-        tries = [reported_without_waiting()]
-        while not tries[-1] and time.monotonic() - started < SLOW_STRETCH_SECONDS:
-            tries.append(reported_without_waiting())
-    assert tries[-1], f"no zero-timeout wait reported its change in {len(tries)} tries"
 
 
 def test_a_wait_with_nothing_changing_returns_after_its_timeout_saying_nothing_changed(
@@ -153,26 +38,6 @@ def test_a_wait_with_nothing_changing_returns_after_its_timeout_saying_nothing_c
                 break
             assert time.monotonic() < budget, "the watch never went quiet"
         assert time.monotonic() - started >= 0.5
-
-
-def test_a_directory_of_10000_files_is_watched_within_a_256_file_limit_and_wakes_on_one_growing(
-    tmp_path: Path,
-) -> None:
-    for number in range(10_000):
-        (tmp_path / f"{number:05}.jsonl").write_bytes(b"")
-    watcher = subprocess.Popen(
-        [sys.executable, str(CHILD), "watch", str(tmp_path), "256"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    assert watcher.stdout is not None
-    ready = watcher.stdout.readline()
-    assert ready == "READY\n", (ready, watcher.stderr.read() if watcher.stderr else "")
-    with (tmp_path / "04321.jsonl").open("ab") as segment:
-        segment.write(b"grown\n")
-    out, err = watcher.communicate(timeout=30)
-    assert out == "CHANGED\n", err
 
 
 def test_closing_a_watch_wakes_a_wait_in_another_thread_at_once(tmp_path: Path) -> None:

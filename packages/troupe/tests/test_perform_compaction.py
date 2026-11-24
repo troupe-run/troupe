@@ -10,8 +10,8 @@ from uuid import UUID
 
 import pytest
 
+from perform_shared import configured, nothing_written
 from runtesting import INIT, OK, Harness, request, script, theatre
-from test_perform import configured, nothing_written
 from troupe.core.errors import TroupeError
 from troupe.core.runs.aggregate import STARTED
 

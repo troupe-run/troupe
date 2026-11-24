@@ -4,11 +4,11 @@ past the stall limit has its stack written from inside its worker (spec: quality
 parallel-tests design D1-D3; shorten-slow-tests design D4; windows-ci-hang design D1).
 
 Each run is a real pytest with check.py's own PARALLEL and DURATIONS options, in a directory
-pytester writes, with the worker count pinned to 2 through xdist's own variable."""
+pytester writes, with the worker count pinned to 2 through xdist's own variable.
+
+Its tests that stay in their own process are in unit/test_check_parallel_unit.py."""
 
 import sys
-import tomllib
-from pathlib import Path
 
 import pytest
 
@@ -104,15 +104,8 @@ def test_a_parallel_run_with_a_failing_test_still_prints_the_slowest_durations(
     result.stdout.fnmatch_lines(["FAILED test_some.py::test_fails*"])
 
 
-def test_the_full_and_the_scoped_tests_gates_ask_for_the_slowest_durations() -> None:
-    for scopes in [(), ("docs",)]:
-        tests = dict(check.gates(scopes))["tests"]
-        assert tests[1 : 1 + len(check.PARALLEL) + 1] == [*check.PARALLEL, "--durations=25"]
-
-
 STALL_LIMIT = 1
 """The stall limit these tests give pytest, in seconds: short, so a test can pass it quickly."""
-
 
 SLEEP_LINE = 5
 """The line of the stuck test's sleep in the file _stall_suite writes. A dump that names it was
@@ -154,19 +147,3 @@ def test_a_parallel_run_with_no_test_past_the_stall_limit_dumps_no_stack(
     output = "\n".join([*result.outlines, *result.errlines])
     assert result.ret == pytest.ExitCode.OK, output
     assert "Timeout (" not in output, output
-
-
-SLOWEST_TEST_MARGIN = 120
-"""The stall limit must be above this many seconds: the slowest test takes 87 s on Windows CI."""
-STALL_LIMIT_CEILING = 600
-"""...and at most this many: the CI job's 30 minutes, less a Windows leg of up to 20 minutes."""
-
-
-def test_the_repositorys_stall_limit_is_set_above_the_slowest_test_and_below_the_jobs_room() -> (
-    None
-):
-    pyproject = Path(check.ROOT, "pyproject.toml").read_text(encoding="utf-8")
-    options = tomllib.loads(pyproject)["tool"]["pytest"]["ini_options"]
-
-    assert "faulthandler_timeout" in options, "pyproject.toml sets no stall limit"
-    assert SLOWEST_TEST_MARGIN < options["faulthandler_timeout"] <= STALL_LIMIT_CEILING

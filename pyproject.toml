@@ -191,6 +191,10 @@ mypy_path = [
     "plugins/runner-scripted/tests",
     "scripts",
     "scripts/tests",
+    "packages/troupe-identity-local/tests",
+    "packages/troupe-store-text/tests",
+    "packages/troupe-vcs-git/tests",
+    "scripts/tests/workspace",
 ]
 
 [tool.pytest.ini_options]

@@ -1,9 +1,10 @@
 """troupe perform, status and logs on the command line (spec: cli; perform-status-logs design D3,
-D4, D14)."""
+D4, D14).
+
+Its tests that stay in their own process are in unit/test_cli_runs_unit.py."""
 
 import hashlib
 import importlib
-import io
 import json
 import os
 import queue
@@ -20,17 +21,20 @@ from uuid import UUID
 
 import pytest
 
+from cli_runs_shared import (
+    cli,
+    configure,
+    repo_fixture,  # noqa: F401
+)
 from client_schemas import check
 from gitrepo import Repo
-from runtesting import ADA, ALLOW, INIT, OK, Harness, request, script, theatre, turn
+from perform_failed_audit_shared import RemovesThenCancels
+from run_notices_shared import interrupted_with_a_notice
+from run_queries_shared import Child
+from runtesting import INIT, OK, Harness, request, script, turn
 from storetesting import git_service
-from test_perform_failed_audit import RemovesThenCancels
-from test_run_notices import interrupted_with_a_notice
-from test_run_queries import Child
-from troupe.cli import COMMANDS, commands, main
+from troupe.cli import COMMANDS, commands
 from troupe.cli.parser import parse
-from troupe.cli.render import render_event, render_run
-from troupe.core.client import messages as m
 from troupe.core.config import aggregate
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
@@ -38,48 +42,8 @@ from troupe.core.runners.limits import RunLimits
 
 # troupe.core.runs re-exports perform the function, so the module is reached by name.
 PERFORM = importlib.import_module("troupe.core.runs.perform")
-ALLOWANCE = {"setting": "allow_unenforced_local_stage", "source": "env"}
 
 TROUPE = [sys.executable, "-c", "import sys; from troupe.cli import main; sys.exit(main())"]
-
-
-def cli(*argv: str) -> tuple[int, str, str]:
-    stdout, stderr = io.StringIO(), io.StringIO()
-    code = main(list(argv), stdout=stdout, stderr=stderr)
-    return code, stdout.getvalue(), stderr.getvalue()
-
-
-@pytest.fixture
-def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
-    """A git theatre as the working directory, with ada acting and the local stage allowed."""
-    made = theatre(tmp_path)
-    for name, value in {**made.env, **ADA, **ALLOW}.items():
-        monkeypatch.setenv(name, value)
-    monkeypatch.chdir(made.path)
-    return made
-
-
-def configure(
-    repo: Repo,
-    options: dict[str, Any],
-    *,
-    expect: list[str] | None = None,
-    name: str = "actor.json",
-    workspace: str = "theatre",
-    effects: dict[str, list[str]] | None = None,
-) -> None:
-    """Define the actor tester in config through the CLI, as a person would, working in the
-    theatre unless ``workspace`` says otherwise."""
-    actor = {
-        "runner": "scripted",
-        "options": options,
-        "expect": expect or [],
-        "effects": effects if effects is not None else {"write": list(expect or [])},
-        "workspace": workspace,
-    }
-    (repo.path / name).write_text(json.dumps(actor), encoding="utf-8")
-    code, _, err = cli("config", "set", f"actors.tester=@{name}")
-    assert code == 0, err
 
 
 def started(repo: Repo, run_id: str) -> dict[str, Any]:
@@ -158,19 +122,6 @@ def test_rehearsing_a_perform_shows_what_would_run_and_starts_and_records_nothin
     assert "Rehearsal: nothing was started or recorded." in out
     assert not (repo.path / ".troupe" / "local" / "runs").exists()
     assert len(git_service(repo).history(aggregate.STREAM)) == before
-
-
-def test_with_no_theatre_perform_fails_naming_the_directory_and_creates_nothing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    nowhere = tmp_path / "nowhere"
-    nowhere.mkdir()
-    monkeypatch.chdir(nowhere)
-    code, out, err = cli("perform", "tester")
-    assert code == 1
-    assert out == ""
-    assert "no .troupe directory" in err
-    assert list(nowhere.iterdir()) == []
 
 
 def test_a_success_prints_progress_on_stderr_and_only_the_result_on_stdout(repo: Repo) -> None:
@@ -328,54 +279,6 @@ def test_status_json_for_a_run_whose_runner_never_started_has_no_null_and_valida
     assert "stderr:" not in out
 
 
-def test_a_running_runs_summary_renders_no_outcome_end_transcript_or_stderr() -> None:
-    summary = m.RunSummary.from_data(
-        {
-            "runId": "0f8fad5b-d9cb-469f-a165-70867728950e",
-            "actor": "tester",
-            "startedBy": {"kind": "human", "id": "ada@example.com", "source": "env"},
-            "runner": {"requested": "scripted"},
-            "stage": {"name": "local", "effects": "unenforced", "allowedBy": ALLOWANCE},
-            "effectCheck": {"kind": "none"},
-            "workspace": {"kind": "theatre"},
-            "state": "running",
-            "events": 0,
-            "startedAt": "2026-10-13T00:00:00.000Z",
-        }
-    )
-    lines = render_run(summary.to_data())
-    assert "  runner: scripted" in lines
-    assert "  outcome: -" in lines
-    assert not [line for line in lines if line.startswith(("  ended", "  transcript", "  stderr"))]
-
-
-@pytest.mark.parametrize(("format_", "shown"), [("native", ""), ("kinds", " (kinds)")])
-def test_an_ended_runs_transcript_line_names_kinds_only_when_its_records_have_them(
-    format_: str, shown: str
-) -> None:
-    summary = m.RunSummary.from_data(
-        {
-            "runId": "0f8fad5b-d9cb-469f-a165-70867728950e",
-            "actor": "tester",
-            "startedBy": {"kind": "human", "id": "ada@example.com", "source": "env"},
-            "runner": {"requested": "scripted"},
-            "stage": {"name": "local", "effects": "unenforced", "allowedBy": ALLOWANCE},
-            "effectCheck": {"kind": "none"},
-            "workspace": {"kind": "theatre"},
-            "state": "ended",
-            "outcome": "succeeded",
-            "events": 2,
-            "startedAt": "2026-10-13T00:00:00.000Z",
-            "endedAt": "2026-10-13T00:00:01.000Z",
-            "transcript": "sha256:" + "a" * 64,
-            "transcriptFormat": format_,
-            "stderr": "sha256:" + "b" * 64,
-            "audit": {"outside": []},
-        }
-    )
-    assert f"  transcript: sha256:{'a' * 64}{shown}" in render_run(summary.to_data())
-
-
 def test_status_shows_one_run_and_lists_runs(repo: Repo) -> None:
     run_id = performed(repo, script(INIT, OK))
     code, out, _ = cli("status", run_id)
@@ -397,29 +300,6 @@ def test_status_with_a_run_and_a_limit_is_a_usage_error(repo: Repo) -> None:
     assert code == 2
     assert out == ""
     assert "not both" in err
-
-
-def _logged(event: dict[str, Any]) -> dict[str, Any]:
-    return {"seq": 1, "at": "2026-10-13T00:00:00.000Z", "event": event}
-
-
-def test_a_context_line_names_kind_who_and_counts_with_a_question_mark_for_a_missing_side() -> None:
-    compacted = {"type": "context", "kind": "compacted", "by": "engine", "message": "squashed"}
-    assert render_event(_logged({**compacted, "tokensBefore": 41000})) == (
-        "     1 2026-10-13T00:00:00.000Z context: compacted by engine, tokens 41000 → ?: squashed"
-    )
-    truncated = {
-        "type": "context",
-        "kind": "truncated",
-        "by": "runner",
-        "message": "dropped old tool output\nand more",
-        "messagesBefore": 120,
-        "messagesAfter": 34,
-    }
-    assert render_event(_logged(truncated)) == (
-        "     1 2026-10-13T00:00:00.000Z context: truncated by runner, messages 120 → 34: "
-        "dropped old tool output"
-    )
 
 
 def test_logs_show_a_context_events_kind_who_and_tokens_before(repo: Repo) -> None:
@@ -730,34 +610,6 @@ def test_status_of_a_run_whose_runner_never_started_shows_no_audit_line(
     _, out, _ = cli("status", run_id)
     assert "outcome: could-not-start" in out
     assert "audit" not in out
-
-
-def test_an_audit_that_couldnt_run_is_shown_with_its_error() -> None:
-    summary = {
-        "runId": "0f8fad5b-d9cb-469f-a165-70867728950e",
-        "actor": "tester",
-        "startedBy": {"kind": "unknown"},
-        "runner": {"requested": "scripted"},
-        "stage": {
-            "name": "local",
-            "effects": "unenforced",
-            "allowedBy": {"setting": "allow_unenforced_local_stage", "source": "env"},
-        },
-        "effectCheck": {"kind": "none"},
-        "workspace": {"kind": "theatre"},
-        "state": "ended",
-        "outcome": "cancelled",
-        "events": 1,
-        "startedAt": "2026-10-13T00:00:00.000Z",
-        "endedAt": "2026-10-13T00:00:01.000Z",
-        "transcript": "sha256:" + "a" * 64,
-        "transcriptFormat": "native",
-        "stderr": "sha256:" + "b" * 64,
-        "audit": {"error": {"code": "vcs.failed", "problem": "git failed.", "fix": "Look."}},
-    }
-    m.RunSummary.from_data(summary)  # a shape troupe sends
-    lines = render_run(summary)
-    assert "  audit couldn't run: vcs.failed: git failed." in lines
 
 
 # Requirement: Status and logs show a run's recorded notices

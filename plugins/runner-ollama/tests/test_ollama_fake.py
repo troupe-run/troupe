@@ -1,5 +1,7 @@
 """The fake Ollama plays what it's scripted to, so the runner's tests can trust it
-(local-model-runner design D12). Driven with plain http.client, not the runner's client."""
+(local-model-runner design D12). Driven with plain http.client, not the runner's client.
+
+Its tests that stay in their own process are in unit/test_ollama_fake_unit.py."""
 
 import contextlib
 import http.client
@@ -24,7 +26,6 @@ HANDLER_DONE_WITHIN = 10.0
 CLOSE_SEEN_WITHIN = 5.0
 """Seconds for the fake to see a client close a connection it's holding: it looks every
 POLL_SECONDS, so this is room for a loaded machine, not the time it takes."""
-
 
 FD_SETSIZE = 1024
 """select.select refuses a descriptor numbered this or higher on Linux and macOS."""
@@ -136,11 +137,6 @@ def test_preflight_can_be_made_silent() -> None:
             pass
         else:
             raise AssertionError("the silent preflight answered")
-
-
-def test_a_done_line_holds_a_cached_count_only_when_given_one() -> None:
-    assert done(cached=4)["prompt_eval_cached_count"] == 4
-    assert "prompt_eval_cached_count" not in done()
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows has no descriptor-number limit")

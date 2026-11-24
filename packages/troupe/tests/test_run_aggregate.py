@@ -10,33 +10,11 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
+from runtesting import STAGE, outcome
 from storetesting import files_service, snapshot
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
-from troupe.core.runners.limits import RunLimits
 from troupe.core.runs.aggregate import ENDED, NOTICED, REPORTED, STARTED, WORKTREE_MADE, Run
-
-
-def outcome(name: str) -> dict[str, Any]:
-    """An outcome as the run host derives it (Run.Ended's schema), for a run that ended ``name``."""
-    return {
-        "outcome": name,
-        "exitCode": 0,
-        "ending": "exited",
-        "transcript": "sha256:" + "a" * 64,
-        "transcriptFormat": "native",
-        "stderr": "sha256:" + "b" * 64,
-        "audit": {"outside": []},
-        "limits": RunLimits().to_data(),
-    }
-
-
-STAGE = {
-    "name": "local",
-    "effects": "unenforced",
-    "allowedBy": {"setting": "allow_unenforced_local_stage", "source": "env"},
-}
-
 
 WORKTREE = {
     "kind": "worktree",
@@ -122,7 +100,6 @@ SILENT = {
     "fix": "Wait, or cancel the run if it seems stuck.",
     "details": {"seconds": 30.0},
 }
-
 
 # Requirement: A run's notices are recorded only between its start and its end
 

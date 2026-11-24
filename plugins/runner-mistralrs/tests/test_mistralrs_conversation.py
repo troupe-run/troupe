@@ -10,7 +10,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from mistralrs_harness import validator
+from mistralrs_conversation_shared import Sink
 from stand_in import StandIn, response
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.compaction import stub
@@ -21,32 +21,6 @@ from troupe_runner_mistralrs.port import LoadSpec
 from troupe_runner_mistralrs.runner import Runner
 
 KV_REFUSAL = "Sequence 1 with 1025 tokens exceeds the total KV cache capacity of 1024 tokens."
-
-
-class Sink:
-    def __init__(self) -> None:
-        self.events: list[dict[str, Any]] = []
-        self.records: list[tuple[str, Any]] = []
-        self.stop = False
-
-    def event(self, event: p.RunEvent) -> None:
-        data = event.to_data()
-        validator("run-event.schema.json#/$defs/event").validate(data)
-        self.events.append(data)
-
-    def transcript(self, kind: p.TranscriptKind, record: bytes) -> None:
-        self.records.append((kind, json.loads(record)))
-
-    def stopping(self) -> bool:
-        return self.stop
-
-    def of(self, type_: str) -> list[dict[str, Any]]:
-        return [e for e in self.events if e["type"] == type_]
-
-    @property
-    def result(self) -> dict[str, Any]:
-        (result,) = self.of("result")
-        return result
 
 
 def _start(

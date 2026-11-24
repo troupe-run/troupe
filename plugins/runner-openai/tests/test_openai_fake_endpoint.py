@@ -1,8 +1,9 @@
 """The fake endpoint does what the runner's tests script it to, seen from a plain urllib client
-(openai-style-runner design D13). The runner's own tests rely on each behaviour here."""
+(openai-style-runner design D13). The runner's own tests rely on each behaviour here.
+
+Its tests that stay in their own process are in unit/test_openai_fake_endpoint_unit.py."""
 
 import json
-import math
 import os
 import socket
 import sys
@@ -124,25 +125,6 @@ def descriptors_past_fd_setsize() -> Iterator[None]:
             for descriptor in held:
                 os.close(descriptor)
             resource.setrlimit(resource.RLIMIT_NOFILE, (soft, hard))
-
-
-WINDOWS_312_TICK = 0.015625
-"""time.monotonic's resolution on Windows with Python 3.12 (GetTickCount64), where #352 failed."""
-
-
-def test_a_pause_lasts_its_length_by_a_monotonic_clock_as_coarse_as_windows_on_3_12(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # A 0.3 s sleep read by a clock that ticks every 15.625 ms comes out as 19 ticks (0.297 s) for
-    # most start times: the failure #352 saw. The fake's pause must last its length by that clock.
-    real = time.monotonic
-    monkeypatch.setattr(
-        time, "monotonic", lambda: math.floor(real() / WINDOWS_312_TICK) * WINDOWS_312_TICK
-    )
-    for _ in range(5):  # different start times within a tick
-        started = time.monotonic()
-        fake_endpoint.pause(0.3)  # timed alone: the HTTP around it would hide a short pause
-        assert time.monotonic() - started >= 0.3
 
 
 def test_a_pause_in_a_stream_is_the_pause_timed_above(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,7 +1,8 @@
 """The Claude Code runner's process, driven over pipes with the stand-in claude on its PATH (spec:
-claude-code-runner; design D2, D3, D6, D7)."""
+claude-code-runner; design D2, D3, D6, D7).
 
-import io
+Its tests that stay in their own process are in unit/test_claude_code_runner_unit.py."""
+
 import json
 import os
 import subprocess
@@ -14,6 +15,7 @@ from typing import Any
 
 import pytest
 
+from claude_code_runner_shared import record_fixture  # noqa: F401
 from claude_harness import (
     FIXTURES,
     TIMEOUT,
@@ -26,7 +28,6 @@ from claude_harness import (
 from fake_claude import install
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.declaration import posix_absolute
-from troupe_runner_claude_code.runner import Runner
 
 FIXED = ["-p", "--output-format", "stream-json", "--verbose", "--no-session-persistence"]
 
@@ -36,11 +37,6 @@ def workspace(tmp_path: Path) -> Path:
     path = tmp_path / "workspace"
     path.mkdir()
     return path
-
-
-@pytest.fixture
-def record(tmp_path: Path) -> Path:
-    return tmp_path / "record.json"
 
 
 def _env(tmp_path: Path, record: Path, **fake: str) -> dict[str, str]:
@@ -638,33 +634,6 @@ def test_the_check_passes_a_stand_in_that_has_ended(tmp_path: Path) -> None:
     finished = subprocess.Popen([sys.executable, "-c", "pass"])
     finished.wait(timeout=30)
     assert stand_in_left_running(_record_of(tmp_path / "record.json", finished.pid)) is None
-
-
-def test_the_check_passes_when_no_stand_in_wrote_a_record(tmp_path: Path) -> None:
-    assert stand_in_left_running(str(tmp_path / "never-written.json")) is None
-    assert stand_in_left_running(None) is None
-
-
-@pytest.mark.parametrize("text", ["", "{}", '{"pid": "x"}', "[1]", "not json"])
-def test_a_record_that_names_no_pid_is_an_error_naming_it(tmp_path: Path, text: str) -> None:
-    record = tmp_path / "record.json"
-    record.write_text(text, encoding="utf-8")
-    with pytest.raises(AssertionError, match="names no pid"):
-        stand_in_left_running(str(record))
-
-
-# Requirement: A message's strings are Unicode text (host-robustness design D3)
-
-
-def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character() -> None:
-    # An engine's \ud800 escape decodes to a lone surrogate, which the host refuses (#311).
-    stdout, stderr = io.BytesIO(), io.BytesIO()
-    writer = Runner(io.BytesIO(), stdout, stderr)
-    writer._send({"jsonrpc": "2.0", "method": "run/event", "params": {"x\udfff": "a\ud800b"}})
-    message = json.loads(stdout.getvalue())
-    assert message["params"] == {"x\ufffd": "a\ufffdb"}
-    assert p.lone_surrogate(message) is None
-    assert b"2 lone surrogates in a run/event message were written as U+FFFD" in stderr.getvalue()
 
 
 # Requirement: A second initialize is refused (host-robustness design D4, #356)

@@ -1,22 +1,17 @@
-"""The local identity sources and the default chain, end to end (spec: identity)."""
+"""The local identity sources and the default chain, end to end (spec: identity).
+
+Its tests that stay in their own process are in unit/test_identity_sources_unit.py."""
 
 from pathlib import Path
 
 import pytest
 
 from gitrepo import Repo, make_repo
+from identity_sources_shared import chain
 from troupe.core.errors import TroupeError
 from troupe.core.identity import Identity, IdentityContext, resolve_identity
-from troupe.core.vcs import load_vcs
-from troupe_identity_local import EnvSource, OsLoginSource, VcsSource
+from troupe_identity_local import OsLoginSource
 from troupe_vcs_git import GitAdapter
-
-LOGIN = OsLoginSource(lookup=lambda: "ada-login")
-
-
-def chain(login: OsLoginSource = LOGIN) -> list[tuple[str, EnvSource | VcsSource | OsLoginSource]]:
-    """The default chain, with the OS login fixed so tests don't depend on who runs them."""
-    return [("env", EnvSource()), ("vcs", VcsSource()), ("os-login", login)]
 
 
 def in_git(repo: Repo, **env: str) -> IdentityContext:
@@ -56,13 +51,6 @@ def test_a_user_email_only_in_the_global_config_resolves_through_git_not_the_os_
 def test_with_no_override_and_no_git_email_the_os_login_is_used(repo: Repo) -> None:
     found = resolve_identity(in_git(repo), sources=chain())
     assert found == Identity(kind="human", id="ada-login", source="os-login")
-
-
-def test_the_filesystem_adapter_has_no_vcs_identity_so_the_os_login_is_used(
-    tmp_path: Path,
-) -> None:
-    context = IdentityContext(env={}, vcs=load_vcs("files", tmp_path))
-    assert resolve_identity(context, sources=chain()).source == "os-login"
 
 
 @pytest.mark.parametrize(

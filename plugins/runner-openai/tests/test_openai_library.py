@@ -2,11 +2,11 @@
 runner as troupe runs it, against the fake endpoint. Written before the runner moved onto the openai
 package, and passing on the runner as it was, so each one shows a behaviour the move kept (spec:
 openai-runner, "The library finds nothing of its own", "The library's own logging stays out of the
-run's output", "The runner talks to its service only through the openai package")."""
+run's output", "The runner talks to its service only through the openai package").
 
-import io
+Its tests that stay in their own process are in unit/test_openai_library_unit.py."""
+
 import json
-import logging
 import subprocess
 import sys
 from collections.abc import Iterator
@@ -17,23 +17,11 @@ import pytest
 
 from fake_endpoint import FakeEndpoint, Reply, final, function_call, sse, text_reply, usage
 from openai_harness import CANARY, Session
-from troupe_runner_openai.defaults import LIBRARY_LOG_MAX_BYTES
-from troupe_runner_openai.failures import StatusError
-from troupe_runner_openai.library import clear_library_environment, quiet_library_logging
+from openai_library_shared import LIBRARY_VARIABLES
 
 FIRST_REQUEST = Path(__file__).parent / "data" / "first-request.json"
 """The body of a run's first request as the runner sent it over urllib, before the openai package
 (openai-library design D1): the run below, with the direction, character and model it names."""
-
-LIBRARY_VARIABLES = {
-    "OPENAI_API_KEY": "sk-from-the-environment",
-    "OPENAI_ADMIN_KEY": "sk-admin-from-the-environment",
-    "OPENAI_BASE_URL": "http://127.0.0.1:9/v1",
-    "OPENAI_ORG_ID": "org-from-the-environment",
-    "OPENAI_PROJECT_ID": "proj-from-the-environment",
-    "OPENAI_CUSTOM_HEADERS": "X-From-The-Environment: yes\nAuthorization: Bearer sk-custom",
-}
-"""Every variable the openai package reads when it isn't given what it names."""
 
 
 @pytest.fixture
@@ -156,36 +144,6 @@ def test_the_transcript_receives_each_event_as_json_not_each_line(
         "response.output_text.delta",
         "response.completed",
     ]
-
-
-# What the runner sets around the library (library.py, failures.py)
-
-
-def test_every_variable_the_library_reads_is_removed_and_nothing_else() -> None:
-    environ = {**LIBRARY_VARIABLES, "OPENAI_LOG": "debug", "HTTPS_PROXY": "http://p:1", "PATH": "x"}
-    removed = clear_library_environment(environ)
-    assert removed == sorted([*LIBRARY_VARIABLES, "OPENAI_LOG"])
-    assert environ == {"HTTPS_PROXY": "http://p:1", "PATH": "x"}
-
-
-def test_the_librarys_warnings_reach_standard_error_masked_and_cut_and_nothing_below() -> None:
-    out = io.StringIO()
-    quiet_library_logging(lambda text: text.replace(CANARY, "[credential]"), out)
-    logger = logging.getLogger("openai")
-    logger.debug("Request options: Authorization: Bearer %s", CANARY)
-    logger.info("HTTP Request: POST")
-    logger.warning("retrying with %s and %s", CANARY, "x" * (LIBRARY_LOG_MAX_BYTES * 2))
-    written = out.getvalue()
-    assert written.count("\n") == 1
-    assert written.startswith("openai runner: library warning: retrying with [credential]")
-    assert written.rstrip().endswith("bytes left out)")
-    assert CANARY not in written
-    assert "Authorization" not in written
-
-
-def test_a_status_failure_keeps_its_headers_by_lower_case_name() -> None:
-    failure = StatusError(429, {"Retry-After": "2"}, b"{}")
-    assert failure.headers == {"retry-after": "2"}
 
 
 def test_a_wrong_shaped_response_ends_the_run_with_no_serialiser_warning_on_stderr(

@@ -2,9 +2,9 @@
 "Init with an audition warms its runner's engine"; in-process-runner design D4; owner, 2026-11-14).
 
 Each case stands a small Python script in for the runner, saying what a real warm-up would.
-"""
 
-import dataclasses
+Its tests that stay in their own process are in unit/test_runner_warm_up_unit.py."""
+
 import json
 import sys
 from pathlib import Path
@@ -12,16 +12,9 @@ from pathlib import Path
 import pytest
 
 from protocol_schemas import check_notice
-from troupe.core import defaults, interim
+from runner_warm_up_shared import _runner
+from troupe.core import defaults
 from troupe.core.runners.warm_up import warm_up
-
-
-def _runner(monkeypatch: pytest.MonkeyPatch, script: str, warm: tuple[str, ...] = ("go",)) -> None:
-    """Make the mistralrs runner a script that, given ``warm``, runs ``script``."""
-    entry = dataclasses.replace(
-        interim.RUNNERS["mistralrs"], command=(sys.executable, "-c", script), warm_up=warm
-    )
-    monkeypatch.setitem(interim.RUNNERS, "mistralrs", entry)
 
 
 def _say(answer: object, code: int = 0) -> str:
@@ -43,13 +36,6 @@ def test_nothing_to_warm_on_this_platform_is_no_notice(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _runner(monkeypatch, _say({"warmedUp": False}))
-    assert warm_up("mistralrs", tmp_path, {}) == []
-
-
-def test_a_runner_without_a_warm_up_starts_no_process(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _runner(monkeypatch, "raise SystemExit('started')", warm=())
     assert warm_up("mistralrs", tmp_path, {}) == []
 
 
@@ -117,11 +103,6 @@ def test_the_warm_up_gets_the_runners_environment_and_no_more(
     assert notice.details["seconds"] == 0  # the canary didn't reach it
 
 
-def test_the_mistralrs_runner_warms_with_its_own_argument() -> None:
-    assert interim.RUNNERS["mistralrs"].warm_up == ("--warm-up",)
-    assert all(not entry.warm_up for name, entry in interim.RUNNERS.items() if name != "mistralrs")
-
-
 def test_the_real_mistralrs_runners_warm_up_answers_in_one_line(tmp_path: Path) -> None:
     notices = warm_up("mistralrs", tmp_path, {})
     if sys.platform == "darwin":
@@ -145,13 +126,4 @@ def test_a_warm_up_time_that_isnt_a_finite_number_is_recorded_as_zero(
     _runner(monkeypatch, f"print({json.dumps({'warmedUp': True, 'seconds': seconds})!r})")
     (notice,) = warm_up("mistralrs", tmp_path, {})
     assert notice.details["seconds"] == 0
-    check_notice(notice.to_data())
-
-
-def test_the_warm_up_is_announced_before_it_starts() -> None:
-    from troupe.core.runners.warm_up import warming
-
-    notice = warming("mistralrs")
-    assert notice.code == "runner.warming-up"
-    assert notice.details == {"runner": "mistralrs"}
     check_notice(notice.to_data())

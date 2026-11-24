@@ -18,8 +18,7 @@ from typing import Any
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from ollama_harness import validator
-from test_ollama_conversation import Recorder
+from ollama_harness import Recorder, validator
 from troupe_plugin_sdk import runner as p
 from troupe_plugin_sdk.events import encoded_size
 from troupe_runner_ollama.client import EngineError, RetryableError

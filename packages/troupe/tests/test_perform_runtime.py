@@ -1,9 +1,10 @@
 """perform on a runtime: resolving it, recording it, handing it over and masking its credential
-(spec: runs, runtimes, runner-protocol; runtimes design D5, D6, D8)."""
+(spec: runs, runtimes, runner-protocol; runtimes design D5, D6, D8).
+
+Its tests that stay in their own process are in unit/test_perform_runtime_unit.py."""
 
 import base64
 import hashlib
-import importlib
 import json
 from pathlib import Path
 from typing import Any
@@ -11,9 +12,10 @@ from uuid import UUID
 
 import pytest
 
-from runtesting import INIT, OK, Harness, request, script, theatre
-from test_perform import configured, nothing_written
-from troupe.core import defaults, runtimes
+from perform_runtime_shared import _harness, _runner_commands
+from perform_shared import configured, nothing_written
+from runtesting import INIT, OK, Harness, request, script
+from troupe.core import defaults
 from troupe.core.client import messages as m
 from troupe.core.errors import TroupeError
 from troupe.core.masking import MARKER
@@ -25,29 +27,10 @@ KEY_HASH = "sha256:" + hashlib.sha256(KEY.encode()).hexdigest()
 OPENAI: dict[str, Any] = {"runtime": "openai", "model": "gpt-test"}
 
 
-def _harness(tmp_path: Path, **env: str) -> Harness:
-    harness = Harness(theatre(tmp_path))
-    harness.env = {**harness.env, **env}
-    return harness
-
-
 def _start(harness: Harness, run_id: str) -> dict[str, Any]:
     [record] = [r for r in harness.stores[0].history(UUID(run_id)) if r.topic == STARTED]
     state: dict[str, Any] = json.loads(record.state)
     return state
-
-
-def _runner_commands(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
-    perform_module = importlib.import_module("troupe.core.runs.perform")
-    seen: list[Any] = []
-    real = perform_module.run_actor
-
-    async def capture(command: Any, *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401
-        seen.append((command, args))
-        return await real(command, *args, **kwargs)
-
-    monkeypatch.setattr(perform_module, "run_actor", capture)
-    return seen
 
 
 # Requirement: A run uses the actor as config defines it (the runtime reaches the runner)
@@ -465,22 +448,6 @@ def test_a_runtime_the_environment_makes_unfit_is_refused_and_nothing_is_recorde
 
 
 ANTHROPIC_ACTOR: dict[str, Any] = {"runner": "anthropic", "model": "claude-haiku-5-5"}
-
-
-def test_the_unfit_refusal_names_the_base_for_an_endpoint_from_config_ending_in_v1() -> None:
-    # Spec: runtimes, "An Anthropic actor on an endpoint ending in /v1". Config refuses such a
-    # runtime when it's set, so perform meets one only from a merge that brought it in; the shared
-    # refusal names the base to use, and where the endpoint came from (owner, 2026-11-14).
-    config = {"runtimes": {"claude-v1": {"endpoint": "https://api.anthropic.com/v1"}}}
-    resolved = runtimes.resolve("claude-v1", config, {})
-    with pytest.raises(TroupeError) as raised:
-        runtimes.refuse_unfit(resolved, "anthropic", "tester", config, {})
-    error = raised.value
-    assert error.code == "runtime.unfit"
-    assert error.details["reasons"] == ["endpoint-version"]
-    assert error.details["from"] == {"endpoint": "runtimes.claude-v1.endpoint"}
-    assert "already ends in /v1 (use https://api.anthropic.com)" in error.problem
-    assert "runtimes.claude-v1.endpoint" in error.fix
 
 
 def test_perform_refuses_an_anthropic_endpoint_from_the_environment_without_repeating_it(

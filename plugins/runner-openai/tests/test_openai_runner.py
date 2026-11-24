@@ -1,9 +1,10 @@
 """The runner as troupe runs it: a process speaking the contract over standard input and output,
 against the fake endpoint (spec: openai-runner; design D5). Every run uses TEST_LIMITS unless a
-test says why not (design D7)."""
+test says why not (design D7).
+
+Its tests that stay in their own process are in unit/test_openai_runner_unit.py."""
 
 import base64
-import io
 import json
 import queue
 import threading
@@ -31,12 +32,9 @@ from openai_harness import (
     CANARY,
     TEST_LIMITS,
     TIMEOUT,
-    LimitsNotSetError,
     Session,
-    check_limits,
 )
 from troupe_plugin_sdk import runner as p
-from troupe_runner_openai.runner import Runner
 
 MASKED_ECHO = "sk-cana*********6789"
 
@@ -361,31 +359,6 @@ def test_end_of_input_mid_run_stops_the_request_and_exits(
         session.close_stdin()
         assert fake.wait_for_client_to_close(STOPPED_WITHIN)
         assert session.wait() == 0
-
-
-# The test limits
-
-
-def test_a_run_started_on_the_real_use_limits_is_refused_by_the_harness() -> None:
-    with pytest.raises(LimitsNotSetError):
-        check_limits({}, None)
-    check_limits(TEST_LIMITS, None)
-    check_limits({"maxTurns": 3}, None)
-    check_limits({}, "refused before any request")
-
-
-# Requirement: A message's strings are Unicode text (host-robustness design D3)
-
-
-def test_a_lone_surrogate_in_a_message_is_written_as_the_replacement_character() -> None:
-    # An engine's \ud800 escape decodes to a lone surrogate, which the host refuses (#311).
-    stdout, stderr = io.BytesIO(), io.BytesIO()
-    writer = Runner(io.BytesIO(), stdout, stderr)
-    writer._write({"jsonrpc": "2.0", "method": "run/event", "params": {"x\udfff": "a\ud800b"}})
-    message = json.loads(stdout.getvalue())
-    assert message["params"] == {"x\ufffd": "a\ufffdb"}
-    assert p.lone_surrogate(message) is None
-    assert b"2 lone surrogates in a run/event message were written as U+FFFD" in stderr.getvalue()
 
 
 # Requirement: A second initialize is refused (host-robustness design D4, #356)

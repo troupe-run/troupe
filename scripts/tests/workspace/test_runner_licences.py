@@ -2,18 +2,19 @@
 Apache-2.0, and a weak-copyleft one is only used unmodified, as its own package (spec:
 runner-protocol; runner-extras design D11, D13; owner, #333).
 
-Each case builds a small workspace with a lock and fake installed metadata; the last test runs the
-check on the real repository. The weak-copyleft notice is read from the list, never written here,
-so this file can't trip the copied-notice rule itself."""
+Each case builds a small workspace with a lock and fake installed metadata. The weak-copyleft notice
+is read from the list, never written here, so this file can't trip the copied-notice rule itself.
+
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_runner_licences_integration.py."""
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
 from conftest import REPO
 
-import guard
 import runner_licences
 from runner_licences import LIST
 
@@ -308,20 +309,3 @@ def test_a_tracked_file_carrying_a_weak_copyleft_notice_is_named(tree: Tree) -> 
 def test_a_file_outside_packages_plugins_and_scripts_isnt_scanned(tree: Tree) -> None:
     tree.runner()
     assert tree.problems({"docs/licences.md": f"{NOTICE}\n"}) == []
-
-
-DECLARATION = guard.check_paths((REPO / guard.CHECK_PATHS).read_text(encoding="utf-8"))
-EVERY_SCOPE = [getattr(pytest.mark, name) for name, _ in DECLARATION.scopes]
-"""The run on the real repository reads every tracked file under packages/, plugins/ and scripts/
-for a copied notice, so a change in any scope, docs included, can change its answer."""
-
-
-def reads_every_scope[F: Callable[..., object]](test: F) -> F:
-    for mark in EVERY_SCOPE:
-        test = mark(test)
-    return test
-
-
-@reads_every_scope
-def test_every_runner_dependency_in_the_repository_has_a_listed_licence() -> None:
-    assert runner_licences.problems(REPO) == []

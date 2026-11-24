@@ -1,15 +1,11 @@
 """Config's schemas accept what they should, and its generated models accept exactly what the
-schemas accept (spec: config; config-model design D2, D6, D11)."""
+schemas accept (spec: config; config-model design D2, D6, D11).
+
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_config_schemas_integration.py."""
 
 import copy
-import importlib.util
-import io
-import json
 import re
-import shutil
-from contextlib import redirect_stderr
-from pathlib import Path
-from types import ModuleType
 from typing import Any
 
 import jsonschema
@@ -18,25 +14,12 @@ from hypothesis import example, given
 from hypothesis import strategies as st
 from pydantic import ValidationError
 
+from config_schemas_shared import generator
 from event_schemas import HASH, LINEAGE, ULID
-from protocol_schemas import PROTOCOL_BASE, ROOT, SCHEMAS, SCRIPTED, validator_for
+from protocol_schemas import PROTOCOL_BASE, SCRIPTED, validator_for
 from runtesting import INIT, OK, script
 from troupe.core.config.base import StrictModel
 from troupe.core.config.models import Actor, ConfigChanged, Runtime
-
-
-def _load() -> ModuleType:
-    spec = importlib.util.spec_from_file_location(
-        "generate_models", ROOT / "scripts" / "generate_models.py"
-    )
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-generator = _load()
 
 ACTOR_URI = PROTOCOL_BASE + "config/actor.schema.json"
 ACTOR = validator_for(ACTOR_URI, SCRIPTED)
@@ -49,41 +32,6 @@ ACTOR_FILE: dict[str, Any] = {
     "options": SCRIPT,
     "expect": ["out/hello.txt"],
 }
-
-# Requirement: Config's types are generated from its schemas
-
-
-def test_the_models_are_what_the_schemas_generate() -> None:
-    err = io.StringIO()
-    with redirect_stderr(err):
-        code = generator.main(["--check"])
-    assert code == 0, err.getvalue()
-
-
-def test_a_schema_changed_without_its_models_fails_the_check_naming_the_fix(
-    tmp_path: Path,
-) -> None:
-    schemas = tmp_path / "schemas"
-    shutil.copytree(SCHEMAS, schemas)
-    actor = schemas / "config" / "actor.schema.json"
-    schema = json.loads(actor.read_text(encoding="utf-8"))
-    schema["properties"]["note"] = {"description": "A new field.", "type": "string"}
-    actor.write_text(json.dumps(schema, indent=2), encoding="utf-8")
-    err = io.StringIO()
-    with redirect_stderr(err):
-        code = generator.main(["--check"], schemas=schemas)
-    assert code == 1
-    message = err.getvalue()
-    assert "packages/troupe/src/troupe/core/config/models.py" in message
-    assert "uv run scripts/generate_models.py" in message
-
-
-def test_regenerating_writes_the_models_the_check_then_accepts(tmp_path: Path) -> None:
-    output = tmp_path / "models.py"
-    assert generator.main([], output=output) == 0
-    assert generator.main(["--check"], output=output) == 0
-    assert output.read_text(encoding="utf-8") == generator.generate()
-
 
 # Requirement: An actor is defined by its runner, options, effect check and character (the file)
 

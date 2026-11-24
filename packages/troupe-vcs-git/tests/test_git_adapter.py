@@ -1,4 +1,6 @@
-"""The git adapter, against real repositories (spec: vcs; event-store design D4, D11)."""
+"""The git adapter, against real repositories (spec: vcs; event-store design D4, D11).
+
+Its tests that stay in their own process are in unit/test_git_adapter_unit.py."""
 
 import subprocess
 import sys
@@ -9,7 +11,6 @@ from pathlib import Path
 import pytest
 
 from gitrepo import Repo, isolated_environment, make_repo, past_the_racy_window
-from troupe.core.commands import narrow_policy
 from troupe.core.errors import TroupeError
 from troupe.core.vcs import is_committed, load_vcs
 from troupe.platform.processes import is_running
@@ -228,12 +229,6 @@ def test_every_repository_location_variable_the_installed_git_lists_is_excluded(
     assert names
     assert names <= GIT_REPOSITORY_LOCATION_VARIABLES
     assert all(GIT_ENVIRONMENT.forbids(name) for name in names)
-
-
-def test_narrowing_the_git_policy_wider_is_environment_policy_invalid() -> None:
-    with pytest.raises(TroupeError) as caught:
-        narrow_policy(GIT_ENVIRONMENT, names={"HOME", "AWS_SECRET_ACCESS_KEY"})
-    assert caught.value.code == "environment.policy-invalid"
 
 
 # The branch token (design D4).

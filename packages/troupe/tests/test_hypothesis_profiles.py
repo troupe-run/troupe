@@ -1,11 +1,11 @@
-"""The project's hypothesis profiles (hypothesis_profiles.py, loaded for every test path)."""
+"""The project's hypothesis profiles (hypothesis_profiles.py, loaded for every test path).
+
+Its tests that stay in their own process are in unit/test_hypothesis_profiles_unit.py."""
 
 import os
 import subprocess
 import sys
 from pathlib import Path
-
-from hypothesis import settings
 
 ROOT = Path(__file__).resolve().parents[3]
 SLOW = """\
@@ -17,19 +17,6 @@ from hypothesis import Phase, given, settings, strategies as st
 def test_slow(number):
     time.sleep(0.3)
 """
-
-
-def test_no_profile_a_run_can_use_has_a_per_example_deadline() -> None:
-    assert settings.get_profile("default").deadline is None
-    assert settings.get_profile("ci").deadline is None
-    assert settings().deadline is None  # whichever is active
-
-
-def test_ci_still_uses_fixed_seeds_and_no_database() -> None:
-    ci = settings.get_profile("ci")
-    assert ci.derandomize is True
-    assert ci.database is None
-
 
 RECORD_DIRS = """\
 import os

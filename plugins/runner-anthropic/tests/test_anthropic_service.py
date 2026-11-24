@@ -1,16 +1,15 @@
 """The one module that uses the anthropic package, against the fake Messages API (spec:
 anthropic-runner, "The library finds nothing of its own", "The credential goes only in the
-Authorization header", "Redirects are never followed", "Every timeout the library applies is one of
-the runner's named settings", "The library's own logging stays out of the run's output"; design D4,
-D10).
+Authorization header", "Redirects are never followed", "Every timeout the library applies is one
+of the runner's named settings"; design D4, D10).
 
 Where it's cheap, each guarantee is also shown failing for the library's own default client, so a
 test here fails if the runner's setting is lost rather than passing because the library happened to
-behave."""
+behave.
 
-import io
+Its tests that stay in their own process are in unit/test_anthropic_service_unit.py."""
+
 import json
-import logging
 import os
 import socket
 import sys
@@ -23,6 +22,10 @@ import anthropic
 import httpx2
 import pytest
 
+from anthropic_service_shared import (
+    KEY,
+    clean_environment_fixture,  # noqa: F401
+)
 from fake_messages import (
     FakeEndpoint,
     Hold,
@@ -35,23 +38,18 @@ from fake_messages import (
 )
 from troupe_runner_anthropic.defaults import (
     CONNECT_TIMEOUT_SECONDS,
-    LIBRARY_LOG_MAX_BYTES,
     STREAM_TIMEOUT_SECONDS,
     WRITE_TIMEOUT_SECONDS,
 )
-from troupe_runner_anthropic.masking import MASK, Mask
 from troupe_runner_anthropic.runtime import Runtime
 from troupe_runner_anthropic.service import (
-    LIBRARY_LOGGERS,
     NetworkError,
     NotAStreamError,
     Service,
     StatusError,
     UnreadableError,
-    quiet_library_logging,
 )
 
-KEY = "sk-ant-canary-0123456789"
 PARAMS: dict[str, Any] = {
     "model": "m",
     "max_tokens": 5,
@@ -70,14 +68,6 @@ ENV_KEY = "sk-ant-env-key-canary"
 ENV_TOKEN = "env-auth-token-canary"  # noqa: S105 - a canary, not a secret
 PROFILE_TOKEN = "profile-token-canary"  # noqa: S105 - a canary, not a secret
 CUSTOM_HEADERS = "X-Leak: from-the-environment\nX-Other: also"
-
-
-@pytest.fixture(autouse=True)
-def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No ANTHROPIC_* variable of the machine's own reaches a test; each test sets its own, and
-    monkeypatch restores them, whatever the runner removed."""
-    for name in [n for n in os.environ if n.upper().startswith("ANTHROPIC_")]:
-        monkeypatch.delenv(name)
 
 
 def _service(endpoint: str, credential: str | None = None, **timeouts: float) -> Service:
@@ -415,54 +405,3 @@ def test_each_event_is_the_librarys_parsed_event_as_a_dict() -> None:
     assert events[0]["message"]["model"] == "fake-model"
     deltas = [e["delta"]["text"] for e in events if e["type"] == "content_block_delta"]
     assert "".join(deltas) == "Hello."
-
-
-# Requirement: The library's own logging stays out of the run's output
-
-
-@pytest.fixture
-def library_loggers() -> Iterator[None]:
-    """Each library logger's handlers, level and propagation, restored after the test."""
-    saved = [
-        (logger, list(logger.handlers), logger.level, logger.propagate)
-        for logger in (logging.getLogger(name) for name in LIBRARY_LOGGERS)
-    ]
-    yield
-    for logger, handlers, level, propagate in saved:
-        logger.handlers = handlers
-        logger.setLevel(level)
-        logger.propagate = propagate
-
-
-@pytest.mark.usefixtures("library_loggers")
-def test_a_debug_record_asked_for_reaches_neither_standard_output_nor_error(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    # What ANTHROPIC_LOG=debug does: the library's logger at DEBUG, with a handler that prints.
-    library = logging.getLogger("anthropic")
-    library.setLevel(logging.DEBUG)
-    library.addHandler(logging.StreamHandler(sys.stdout))
-    stream = io.StringIO()
-    quiet_library_logging(Mask(KEY), stream)
-    library.debug("Request options: %s", {"headers": {"Authorization": f"Bearer {KEY}"}})
-    logging.getLogger("anthropic._base_client").info("HTTP Request: POST")
-    logging.getLogger("httpx2").debug("sending")
-    assert stream.getvalue() == ""
-    assert capsys.readouterr().out == ""
-
-
-@pytest.mark.usefixtures("library_loggers")
-def test_a_warning_reaches_the_stream_as_one_line_masked_and_cut(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    stream = io.StringIO()
-    quiet_library_logging(Mask(KEY), stream)
-    logging.getLogger("anthropic._client").warning("key %s\nthen %s", KEY, "x" * 5000)
-    written = stream.getvalue()
-    assert written.count("\n") == 1
-    assert written.startswith("anthropic runner: library warning: key ")
-    assert MASK in written
-    assert KEY not in written
-    assert written.rstrip("\n").endswith("bytes left out)")
-    assert len(written.encode()) < LIBRARY_LOG_MAX_BYTES + 200
-    assert capsys.readouterr().out == ""

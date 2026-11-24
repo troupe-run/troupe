@@ -1,20 +1,18 @@
 """Reading a streamed Responses API response into one reply (spec: openai-runner, "A broken stream
 is retried as a network failure", "A completed reply without tool calls ends the run"; design D4,
-D15). Tested on two recorded runs: OpenAI's gpt-6-luna and local Ollama's qwen3.5:4b."""
+D15). Tested on two recorded runs: OpenAI's gpt-6-luna and local Ollama's qwen3.5:4b.
+
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_openai_stream_integration.py."""
 
 import json
 from pathlib import Path
 from typing import Any
 
-import httpx2
 import pytest
-from hypothesis import HealthCheck, given, settings
-from hypothesis import strategies as st
 
 from fake_endpoint import (
     Cut,
-    FakeEndpoint,
-    Reply,
     event,
     final,
     function_call,
@@ -23,41 +21,10 @@ from fake_endpoint import (
     sse,
     usage,
 )
+from openai_stream_shared import OLLAMA, OPENAI, _read
 from troupe_runner_openai.failures import UnreadableError
-from troupe_runner_openai.service import Service, parse_endpoint
 from troupe_runner_openai.stream import Reply as Parsed
-from troupe_runner_openai.stream import ReplyReader, ShapeError, StreamError
-
-DATA = Path(__file__).parent / "data"
-OPENAI = DATA / "openai-responses-loop"
-OLLAMA = DATA / "ollama-responses-loop"
-
-
-class _Body:
-    """The body the next response is: what _service's transport answers every request with."""
-
-    data = b""
-
-
-def _answer(_: httpx2.Request) -> httpx2.Response:
-    return httpx2.Response(200, headers={"content-type": "text/event-stream"}, content=_Body.data)
-
-
-_SERVICE = Service(
-    parse_endpoint("http://127.0.0.1:9/v1"), None, transport=httpx2.MockTransport(_answer)
-)
-"""The library reading a body held in memory, through the runner's line cap: the stream as the
-runner reads it, without a socket (openai-library design D4)."""
-
-
-def _read(data: bytes) -> Parsed:
-    """The reply ``data`` reads as, through the library, or the error reading it raises."""
-    _Body.data = data
-    reader = ReplyReader()
-    for each in _SERVICE.stream({"model": "m", "stream": True}).events:
-        if reader.feed(each):
-            break
-    return reader.reply()
+from troupe_runner_openai.stream import ShapeError, StreamError
 
 
 def _parse(lines: list[Any]) -> Parsed:
@@ -302,33 +269,3 @@ def test_a_recorded_stream_cut_anywhere_reads_whole_or_is_cut_short_never_anythi
             assert outcome == whole, f"cut at {at}"
             assert text[:at].endswith(b"\n\n"), f"cut at {at} read whole before its blank line"
     assert cut_short > 0
-
-
-# However the bytes arrive
-
-
-def _through_the_network(fake: FakeEndpoint) -> Parsed:
-    service = Service(parse_endpoint(fake.endpoint), None)
-    try:
-        reader = ReplyReader()
-        for each in service.stream({"model": "m", "stream": True}).events:
-            if reader.feed(each):
-                break
-        return reader.reply()
-    finally:
-        service.close()
-
-
-@settings(max_examples=25, deadline=None, suppress_health_check=[HealthCheck.too_slow])
-@given(
-    cuts=st.lists(st.integers(min_value=0), max_size=12), which=st.sampled_from([OPENAI, OLLAMA])
-)
-def test_however_a_recorded_streams_bytes_are_split_into_reads_the_reply_is_the_same(
-    cuts: list[int], which: Path
-) -> None:
-    data = (which / "stream-1.txt").read_bytes()
-    points = sorted({c % (len(data) + 1) for c in cuts})
-    pieces = [data[a:b] for a, b in zip([0, *points], [*points, len(data)], strict=True)]
-    with FakeEndpoint([Reply(chunks=[p for p in pieces if p])]) as fake:
-        reply = _through_the_network(fake)
-    assert reply == _read(data)

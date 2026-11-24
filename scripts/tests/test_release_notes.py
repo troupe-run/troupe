@@ -5,22 +5,22 @@ release-notes-non-ascii design D1 to D7).
 Most tests use a scratch root with one or two made-up components, so each scenario's input is
 written out. The reproduction tests read the real 0.2.0 artefacts: eeab95c's release-notes.md blob
 as git held it, the six releases as published, and this checkout's changelogs, whose 0.2.0-era
-sections never change."""
+sections never change.
+
+Its tests that start a process, open a socket or use a git theatre are in
+integration/test_release_notes_integration.py."""
 
 import hashlib
 import html
-import json
 import re
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
-from conftest import REPO, SCRIPTS
+from conftest import REPO
+from release_notes_shared import OLDER, SECTION, WARNING, good, line, redated, write_root
 
 import release_notes
-from release_config import CONFIG, MANIFEST
-from release_tags import UnreadableError, expected
+from release_tags import UnreadableError
 
 FIXTURES = Path(__file__).parent / "fixtures" / "release-notes"
 BEFORE = FIXTURES / "release-notes-eeab95c-before.md"
@@ -33,70 +33,8 @@ BLOB_ID = "055e5de4f6ab666da7ab26877b329446a5305560"
 PUBLISHED = sorted(path for path in FIXTURES.glob("*.md") if path != BEFORE)
 """The six releases #486 names, their bodies as published (fetched 2026-11-24)."""
 LOST = {path.stem for path in PUBLISHED}
-WARNING = "### ⚠ BREAKING CHANGES"
 SKIPPED_IN_0_2_0 = {"troupe-runner-ollama-v0.1.0", "protocol-v0.2.0"}
 """The two components #263's run didn't release (#484); released later from an inline body."""
-
-SECTION = """## [0.2.0](https://example.invalid/compare/v0.1.0...v0.2.0) (2026-11-19)
-
-
-### ⚠ BREAKING CHANGES
-
-* **api:** the old call is gone
-
-### Features
-
-* **api:** a new call ([abc1234](https://example.invalid/commit/abc1234))
-"""
-OLDER = """## 0.1.0 (2026-11-01)
-
-
-### Features
-
-* **api:** the first call ([def5678](https://example.invalid/commit/def5678))
-"""
-
-
-def write_root(
-    tmp_path: Path,
-    versions: dict[str, str] | None = None,
-    changelogs: dict[str, str | None] | None = None,
-) -> Path:
-    """A root whose config names components `example` and `other` at pkgs/<name>, with a manifest
-    and a changelog for each. A changelog given as None isn't written."""
-    versions = versions or {"example": "0.2.0", "other": "0.1.0"}
-    texts: dict[str, str | None] = {
-        "example": f"# Changelog\n\n{SECTION}\n{OLDER}",
-        "other": f"# Changelog\n\n{OLDER}",
-    }
-    texts |= changelogs or {}
-    config = {
-        "include-component-in-tag": True,
-        "packages": {f"pkgs/{name}": {"component": name} for name in versions},
-    }
-    (tmp_path / CONFIG).write_text(json.dumps(config), encoding="utf-8")
-    manifest = {f"pkgs/{name}": version for name, version in versions.items()}
-    (tmp_path / MANIFEST).write_text(json.dumps(manifest), encoding="utf-8")
-    for name in versions:
-        text = texts.get(name)
-        if text is not None:
-            (tmp_path / "pkgs" / name).mkdir(parents=True)
-            (tmp_path / "pkgs" / name / "CHANGELOG.md").write_bytes(text.encode("utf-8"))
-    return tmp_path
-
-
-def line(tag: str, body: str | None, draft: bool = False) -> str:
-    """One release as the workflow's `gh api ... --jq '... | @json'` prints it."""
-    return json.dumps([tag, body, draft], ensure_ascii=False)
-
-
-def redated(notes: str) -> str:
-    """The notes with the heading's date moved, as when a release merges after it was written."""
-    return re.sub(r"\(\d{4}-\d\d-\d\d\)", "(2026-12-31)", notes, count=1)
-
-
-def good(root: Path) -> list[str]:
-    return [line(tag, redated(release_notes.section(root, tag))) for tag in expected(root)]
 
 
 def test_notes_equal_to_their_sections_apart_from_the_date_pass(tmp_path: Path) -> None:
@@ -234,49 +172,6 @@ def test_a_tag_whose_component_isnt_configured_has_no_section(tmp_path: Path) ->
     root = write_root(tmp_path)
     with pytest.raises(UnreadableError, match=r"component 'gone' of tag 'gone-v0\.1\.0'"):
         release_notes.section(root, "gone-v0.1.0")
-
-
-def run(root: Path, *args: str, stdin: str = "") -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(
-        [sys.executable, str(SCRIPTS / "release_notes.py"), "--root", str(root), *args],
-        input=stdin.encode("utf-8"),
-        capture_output=True,
-        check=False,
-    )
-
-
-def test_the_script_exits_0_when_every_release_matches(tmp_path: Path) -> None:
-    root = write_root(tmp_path)
-    result = run(root, stdin="\n".join(good(root)) + "\n")
-    assert (result.returncode, result.stderr) == (0, b"")
-
-
-def test_the_script_exits_1_naming_a_release_that_differs(tmp_path: Path) -> None:
-    root = write_root(tmp_path)
-    lines = good(root)
-    lines[0] = line("example-v0.2.0", SECTION.replace("⚠", "�"))
-    result = run(root, stdin="\n".join(lines))
-    assert result.returncode == 1
-    stderr = result.stderr.decode("utf-8")
-    assert "example-v0.2.0's notes differ" in stderr
-    assert f"changelog: {WARNING}" in stderr
-
-
-def test_the_script_exits_1_naming_an_unreadable_input(tmp_path: Path) -> None:
-    result = run(write_root(tmp_path), stdin="not json\n")
-    assert result.returncode == 1
-    assert result.stderr.decode("utf-8").startswith("release notes: input line 1 isn't JSON")
-
-
-def test_the_script_prints_a_tags_section_for_its_repair(tmp_path: Path) -> None:
-    result = run(write_root(tmp_path), "--section", "example-v0.2.0")
-    assert (result.returncode, result.stdout.decode("utf-8")) == (0, SECTION)
-
-
-def test_the_script_refuses_the_section_of_an_unconfigured_tag(tmp_path: Path) -> None:
-    result = run(write_root(tmp_path), "--section", "gone-v0.1.0")
-    assert (result.returncode, result.stdout) == (1, b"")
-    assert "'gone-v0.1.0'" in result.stderr.decode("utf-8")
 
 
 # The 0.2.0 reproduction (design D7).

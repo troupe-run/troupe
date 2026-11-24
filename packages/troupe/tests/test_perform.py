@@ -14,14 +14,14 @@ import pytest
 
 import claude_stand_in
 import ollama_stand_in
+from perform_shared import FAKE_SECRET, configured, nothing_written
 from runtesting import ADA, ALLOW, INIT, OK, Harness, failing_at, request, script, theatre, turn
 from storetesting import git_service, snapshot
 from troupe.core import defaults, interim
 from troupe.core.artifacts import ArtifactStore, MemoryArtifactStore
 from troupe.core.client import messages as m
-from troupe.core.config import aggregate, kinds, projection
+from troupe.core.config import aggregate, kinds
 from troupe.core.config.merge import merge
-from troupe.core.config.stream import read as read_config
 from troupe.core.errors import TroupeError
 from troupe.core.files import directory_lock
 from troupe.core.runners.limits import RunLimits
@@ -337,22 +337,6 @@ def test_a_run_that_never_sends_init_records_its_start_without_a_runner_then_its
     assert result.run.outcome == "could-not-start"
 
 
-# 7.5: refusals leave nothing behind.
-
-
-def configured(harness: Harness, asked: dict[str, Any]) -> dict[str, str]:
-    """Define the actor in config, then snapshot .troupe/: what perform must leave as it is."""
-    harness.configure(asked)
-    projection.flush(
-        harness.repo.path, read_config(git_service(harness.repo)).config, {}
-    )  # the files too, so a refused perform has nothing to flush either
-    return snapshot(harness.repo.path / ".troupe")
-
-
-def nothing_written(harness: Harness, before: dict[str, str]) -> bool:
-    return snapshot(harness.repo.path / ".troupe") == before
-
-
 def test_no_identity_refuses_before_a_runner_starts_and_leaves_nothing(tmp_path: Path) -> None:
     harness = Harness(theatre(tmp_path), env=dict(ALLOW), identity_chain=("env",))
     before = configured(harness, request(script(INIT, OK)))
@@ -657,7 +641,6 @@ def test_an_ollama_actors_runner_is_given_no_variables_even_with_ollama_host_and
 
 
 FAKE_TOKEN = "oauth-token"  # noqa: S105 - a stand-in value, checked for where it arrives
-FAKE_SECRET = "s3cret"  # noqa: S105 - a stand-in value, checked for where it never arrives
 
 
 def _claude_code_env(tmp_path: Path, record: Path, **variables: str) -> dict[str, str]:

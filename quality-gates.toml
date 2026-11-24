@@ -105,7 +105,6 @@ exclude = ["**/fixtures/**", "openspec/changes/archive/**", "uv.lock"]
 "contributing/runners.md" = 84992                                # troupe-run/troupe#473
 "packages/troupe/tests/test_run_host.py" = 83968                 # troupe-run/troupe#474
 "openspec/specs/runner-protocol/spec.md" = 71680                 # troupe-run/troupe#475
-"packages/troupe/tests/test_platform_processes.py" = 70656       # troupe-run/troupe#476
 "openspec/specs/openai-runner/spec.md" = 68608                   # troupe-run/troupe#477
 
 # A pull request that changes the lock file fails on an advisory of these severities that has a fix.
