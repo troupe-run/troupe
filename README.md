@@ -16,7 +16,7 @@ downloads one for it if you don't have one. This installs the latest release:
 
 <!-- x-release-please-start-version -->
 ```sh
-uv tool install --no-sources "git+https://github.com/troupe-run/troupe@troupe-run-v0.2.0#subdirectory=packages/troupe-run"
+uv tool install --no-sources "git+https://github.com/troupe-run/troupe@troupe-run-v0.3.0#subdirectory=packages/troupe-run"
 ```
 <!-- x-release-please-end -->
 
