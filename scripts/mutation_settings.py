@@ -35,6 +35,10 @@ class Unit:
     name: str
     source: str
     tests: str
+    select: str
+    """The directory under `tests` that mutmut runs: troupe's unit tests, never its integration
+    tests (owner decision 2026-11-23; #394). The rest of `tests` stays beside the source, unmutated:
+    the helpers both kinds import live there."""
     also_copy: tuple[str, ...] = ()  # what the tests read beside the source, copied in with it
     deselect: tuple[tuple[str, str], ...] = ()  # (test node id, why mutmut's hooks can't run it)
 
@@ -136,6 +140,25 @@ def text(value: object, where: str) -> str:
     return value
 
 
+def selection(value: object, where: str, tests: str) -> str:
+    """A directory under `tests`, by plain relative segments: no absolute path, no `.` or `..`, no
+    backslash, whitespace or control character, no trailing slash. A mutation run uses only these
+    tests (#394)."""
+    if (
+        not isinstance(value, str)
+        or not value
+        or value.startswith("/")
+        # setup.cfg takes it unquoted: a newline would start another key, a space split it (#394)
+        or not value.isprintable()
+        or any(c.isspace() or c == "\\" for c in value)
+        or any(part in {"", ".", ".."} for part in value.split("/"))
+    ):
+        raise SettingsError(
+            f"{where} is {value!r}; it must be a directory under {tests}, such as 'unit'"
+        )
+    return value
+
+
 def load_repository(name: str, value: object) -> Repository:
     where = f"repositories.{name}"
     raw = closed(value, {"tool", "units", "mutate", "tests"}, where, required={"tool"})
@@ -152,10 +175,12 @@ def load_repository(name: str, value: object) -> Repository:
             at = f"{where}.units[{index}]"
             fields = closed(
                 unit,
-                {"name", "source", "tests", "also_copy", "deselect"},
+                {"name", "source", "tests", "select", "also_copy", "deselect"},
                 at,
-                required={"name", "source", "tests"},
+                required={"name", "source", "tests", "select"},
             )
+            tests = text(fields["tests"], f"{at}.tests")
+            selected = f"{tests.rstrip('/')}/{selection(fields['select'], f'{at}.select', tests)}"
             also_copy = fields.get("also_copy", [])
             if not isinstance(also_copy, list):
                 raise SettingsError(f"{at}.also_copy must be a list of paths")
@@ -166,17 +191,19 @@ def load_repository(name: str, value: object) -> Repository:
             for number, entry in enumerate(deselect):
                 item = closed(entry, {"test", "why"}, f"{at}.deselect[{number}]")
                 test = text(item["test"], f"{at}.deselect[{number}].test")
-                if not test.startswith(fields["tests"].rstrip("/") + "/") or "::" not in test:
+                # Outside the selection it could never match: the run never collects it (#394).
+                if not test.startswith(selected + "/") or "::" not in test:
                     raise SettingsError(
                         f"{at}.deselect[{number}].test is {test!r}; it must be a test node id "
-                        f"under {fields['tests']}, such as {fields['tests']}/test_x.py::test_y"
+                        f"under {selected}, such as {selected}/test_x.py::test_y"
                     )
                 skipped.append((test, text(item["why"], f"{at}.deselect[{number}].why")))
             loaded.append(
                 Unit(
                     name=text(fields["name"], f"{at}.name"),
                     source=text(fields["source"], f"{at}.source"),
-                    tests=text(fields["tests"], f"{at}.tests"),
+                    tests=tests,
+                    select=fields["select"],
                     also_copy=tuple(text(path, f"{at}.also_copy") for path in also_copy),
                     deselect=tuple(skipped),
                 )
