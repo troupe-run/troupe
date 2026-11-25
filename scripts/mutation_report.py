@@ -364,6 +364,26 @@ def mutated_line(diff: str, start: int) -> tuple[int, str]:
     return start + offset - 1, change
 
 
+def to_show(root: Path, source: str, skip: tuple[str, ...] = ()) -> dict[str, list[str]]:
+    """The mutants whose diffs `from_mutmut` reads, file by file: each survivor and crashed mutant,
+    by the same rules, so they can all be rendered at once (#404)."""
+    wanted: dict[str, list[str]] = {}
+    for meta in sorted((root / "mutants" / source).rglob("*.py.meta")):
+        path = str(meta.relative_to(root / "mutants")).removesuffix(".meta")
+        if path.startswith(skip) or not (root / path).is_file():
+            continue
+        codes = json.loads(meta.read_text(encoding="utf-8"))["exit_code_by_key"]
+        names = [
+            name
+            for name, code in sorted(codes.items())
+            if code is not None
+            and STATUS_BY_EXIT_CODE.get(code, "skipped") in ("survived", "crashed")
+        ]
+        if names:
+            wanted[path] = names
+    return wanted
+
+
 def from_mutmut(
     root: Path,
     source: str,
