@@ -298,6 +298,42 @@ def deselected(workdir: Path, checkout: Path, unit: ms.Unit) -> list[str]:
     return args
 
 
+SHOW = Path(__file__).resolve().parent / "mutation_show.py"
+
+
+def shown(workdir: Path, mutmut: str, wanted: Mapping[str, Sequence[str]]) -> dict[str, str]:
+    """What `mutmut show` prints for every wanted mutant, from one run of mutation_show.py by the
+    interpreter beside `mutmut`, in its working directory (#404, design D1). A render that fails,
+    isn't JSON, or leaves a mutant out is an error, never a blank diff."""
+    if not wanted:
+        return {}
+    python = str(Path(mutmut).with_name("python"))
+    try:
+        done = subprocess.run(
+            [python, str(SHOW)],
+            cwd=workdir,
+            input=json.dumps(wanted),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as error:
+        raise RunError(f"{python} can't run mutation_show.py: {error}") from error
+    if done.returncode != 0:
+        said = (done.stdout + done.stderr).strip()[-800:]
+        raise RunError(f"mutation_show.py failed (exit {done.returncode}): {said}")
+    try:
+        rendered = json.loads(done.stdout)
+    except ValueError as error:
+        raise RunError(f"mutation_show.py's output isn't JSON: {error}") from error
+    if not isinstance(rendered, dict):
+        raise RunError("mutation_show.py's output isn't an object of mutant names")
+    missing = sorted({name for names in wanted.values() for name in names} - set(rendered))
+    if missing:
+        raise RunError(f"mutation_show.py left out {', '.join(missing[:5])}")
+    return {str(name): str(text) for name, text in rendered.items()}
+
+
 def mutmut_bin() -> str:
     found = shutil.which("mutmut")
     if found is None:
@@ -467,13 +503,12 @@ def run_mutmut(
             # a run that didn't happen, never a report of empty modules.
             raise RunError(f"mutmut failed for {unit.name} (exit {code}); its output says why")
 
-        def show(name: str) -> str:
-            done = subprocess.run(
-                [mutmut, "show", name], cwd=workdir, capture_output=True, text=True, check=False
-            )
-            return done.stdout
-
         tests = os.path.relpath(checkout / unit.tests, checkout / unit.source)
+        skip = (f"src/{tests}/",)
+        # Every diff the report reads, in one render (#404): a `mutmut show` per survivor cost
+        # about 0.35 s each, past the job's timeout once survivors passed about 4,500.
+        rendered = shown(workdir, mutmut, mr.to_show(workdir, "src", skip))
+        show = rendered.__getitem__
         modules = mr.from_mutmut(workdir, "src", show, skip=(f"src/{tests}/",), unreached=unreached)
         source = unit.source.rstrip("/")
         mapped = {}
