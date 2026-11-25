@@ -48,6 +48,7 @@ class UnitState:
     tested: int = 0
     """Results this run produced."""
     discarded: list[str] = field(default_factory=list)
+    unreached: bool = False  # its selected tests reach none of its code (#399)
     lost: bool = False
     """State the previous run saved couldn't be restored: evicted or lost."""
     unfit: bool = False
