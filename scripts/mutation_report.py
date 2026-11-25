@@ -365,11 +365,18 @@ def mutated_line(diff: str, start: int) -> tuple[int, str]:
 
 
 def from_mutmut(
-    root: Path, source: str, show: Callable[[str], str], skip: tuple[str, ...] = ()
+    root: Path,
+    source: str,
+    show: Callable[[str], str],
+    skip: tuple[str, ...] = (),
+    *,
+    unreached: bool = False,
 ) -> dict[str, Module]:
     """Each module's counts and survivors from mutmut's `mutants/` tree, for one unit's `source`.
     Paths starting with one in `skip` (the unit's tests, whose fixtures may hold mutmut's own
-    files) aren't read."""
+    files) aren't read. `unreached`: mutmut stopped because the unit's selected tests reach none
+    of its code, so a mutant without a result is one no test reaches, not one still to run
+    (#399)."""
     modules: dict[str, Module] = {}
     for meta in sorted((root / "mutants" / source).rglob("*.py.meta")):
         path = str(meta.relative_to(root / "mutants")).removesuffix(".meta")
@@ -384,7 +391,10 @@ def from_mutmut(
         tree, lines = ast.parse(code), code.splitlines()
         for name, code in sorted(codes.items()):
             if code is None:
-                finished = False
+                if unreached:
+                    counts["no_tests"] += 1
+                else:
+                    finished = False
                 continue
             status = STATUS_BY_EXIT_CODE.get(code, "skipped")
             counts[status] += 1
