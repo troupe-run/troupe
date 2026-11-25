@@ -48,7 +48,7 @@ dev = [
     "ruff>=0.17.6",
     "mypy>=2.4.1",
     "pytest>=9.2.0",
-    "hypothesis>=6.170.15",
+    "hypothesis>=6.170.17",
     "import-linter>=2.16",
     "types-jsonschema>=4.26",
     # Generates troupe.core.config.models from the config schemas (scripts/generate_models.py).
