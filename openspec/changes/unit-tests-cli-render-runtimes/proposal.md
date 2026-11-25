@@ -19,8 +19,11 @@ tests.
     error, audit, transcript, stderr, recording failure, worktree changes, notices), and a run's list line.
   - `troupe.cli.runtimes`: a resolved runtime's lines (endpoint or in-process, model or how to set one, credential
     named directly or by a variable, set or not, engine, price) and the price's wording.
-- Existing tests in `test_cli_render.py` stay as they are; new ones are added beside them, and the runtimes tests go
-  in a new `test_cli_runtimes.py`.
+- Existing tests in `test_cli_render.py` stay as they are. The event, notice and error lines are added beside them;
+  the run summary's lines go in a new `test_cli_render_summary.py`, which keeps both files under the size gate's
+  warning, and the runtimes tests in a new `test_cli_runtimes.py`.
+- Every fixture is first read by the protocol's own message class (`ResolvedRuntime`, `LoggedEvent`, `LoggedNotice`,
+  `RunSummary`), so the text pinned is that of a shape troupe really sends.
 - No source change: the tests pin what the code prints today. If a test finds a defect, it's raised as its own issue.
 
 ## Capabilities
@@ -35,6 +38,7 @@ None. Only tests change; no behaviour does (`skip_specs: true`).
 
 ## Impact
 
-`packages/troupe/tests/unit/test_cli_render.py` (extended) and `packages/troupe/tests/unit/test_cli_runtimes.py`
-(new). Mutation scores of `troupe.cli.render` and `troupe.cli.runtimes` rise over 60%, measured locally with mutmut
-3.8.1 on the unit tests only, with CI's settings, and confirmed by the PR's mutation report. Closes #520 and #521.
+`packages/troupe/tests/unit/test_cli_render.py` (extended), and `test_cli_render_summary.py` and
+`test_cli_runtimes.py` (new) beside it. Mutation scores of `troupe.cli.render` and `troupe.cli.runtimes` rise over
+60%, measured locally with mutmut 3.8.1 on the unit tests only, with CI's settings, and confirmed by the PR's
+mutation report. Closes #520 and #521.
