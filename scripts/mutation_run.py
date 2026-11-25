@@ -30,11 +30,14 @@ import shlex
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import tomllib
-from collections.abc import Callable, Mapping, Sequence
+from collections import deque
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Protocol
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mutation_report as mr
@@ -54,15 +57,67 @@ class RunError(Exception):
     """A tool couldn't run at all, as opposed to running and finding survivors."""
 
 
-Run = Callable[[list[str], Path, float], int]
-"""Runs a command in a directory, with a timeout in seconds: its exit code, or -1 on timeout."""
+class Run(Protocol):
+    """Runs a command in a directory, with a timeout in seconds: its exit code, or -1 on timeout.
+    Given `tail`, the last lines of its output are kept there too (#399, design D1)."""
+
+    def __call__(
+        self, command: list[str], cwd: Path, timeout: float, /, *, tail: list[str] | None = None
+    ) -> int: ...
 
 
-def run_command(command: list[str], cwd: Path, timeout: float) -> int:
-    try:
-        return subprocess.run(command, cwd=cwd, check=False, timeout=max(timeout, 1)).returncode
-    except subprocess.TimeoutExpired:
-        return -1
+TAIL_LINES = 50
+
+
+def run_command(
+    command: list[str], cwd: Path, timeout: float, *, tail: list[str] | None = None
+) -> int:
+    if tail is None:
+        try:
+            return subprocess.run(command, cwd=cwd, check=False, timeout=max(timeout, 1)).returncode
+        except subprocess.TimeoutExpired:
+            return -1
+    # Every line still goes to the log as it comes; the last ones are kept as well.
+    kept: deque[str] = deque(maxlen=TAIL_LINES)
+    with subprocess.Popen(
+        command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+    ) as process:
+        output = process.stdout
+        if output is None:  # stdout=PIPE always gives one; this tells mypy so
+            raise RunError(f"{command[0]} gave no output to read")
+
+        def pump() -> None:
+            for line in output:
+                sys.stdout.buffer.write(line)
+                sys.stdout.buffer.flush()
+                kept.append(line.decode("utf-8", errors="replace").rstrip("\n"))
+
+        sys.stdout.flush()
+        reader = threading.Thread(target=pump, daemon=True)
+        reader.start()
+        try:
+            code = process.wait(timeout=max(timeout, 1))
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            code = -1
+        reader.join(timeout=5)
+    tail.extend(kept)
+    return code
+
+
+UNREACHED = "Stopping early, because we could not find any test case for any mutant."
+"""mutmut 3.8.1's words when its stats pass found no selected test reaching any mutant. With exit 1
+they're the one mutmut failure that's a report, not a failed run (#399, design D2). Check them
+again when scripts/mutation.json moves mutmut to a new version."""
+
+
+def none_reached(code: int, tail: Sequence[str]) -> bool:
+    """Whether mutmut stopped because the unit's selected tests reach none of its code: exit 1 and
+    its exact words on a line of its output, after the spinner's last carriage return."""
+    return code == 1 and any(
+        line.rsplit("\r", 1)[-1].strip().startswith(UNREACHED) for line in tail
+    )
 
 
 # mutmut
@@ -394,8 +449,20 @@ def run_mutmut(
                 previously_saved=unit.name in state.previously_saved,
             )
         mutmut = mutmut_bin()
-        code = run([mutmut, "run", *names], workdir, deadline - time.monotonic())
-        if code not in (0, -1):
+        tail: list[str] = []
+        code = run([mutmut, "run", *names], workdir, deadline - time.monotonic(), tail=tail)
+        unreached = none_reached(code, tail)
+        if unreached:
+            # Every mutant is reached by no test: a report of that, judged, and the run goes on to
+            # the next unit (#399, owner decision A).
+            print(
+                f"mutation_run: {unit.name}: its selected tests reach none of its code; every "
+                "mutant counted as reached by no test",
+                flush=True,
+            )
+            if record is not None:
+                record.unreached = True
+        elif code not in (0, -1):
             # mutmut stops before mutating anything when the unit's tests fail in its copy: that's
             # a run that didn't happen, never a report of empty modules.
             raise RunError(f"mutmut failed for {unit.name} (exit {code}); its output says why")
@@ -407,7 +474,7 @@ def run_mutmut(
             return done.stdout
 
         tests = os.path.relpath(checkout / unit.tests, checkout / unit.source)
-        modules = mr.from_mutmut(workdir, "src", show, skip=(f"src/{tests}/",))
+        modules = mr.from_mutmut(workdir, "src", show, skip=(f"src/{tests}/",), unreached=unreached)
         source = unit.source.rstrip("/")
         mapped = {}
         for name, module in modules.items():
