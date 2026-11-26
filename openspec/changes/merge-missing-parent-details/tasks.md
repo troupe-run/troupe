@@ -14,7 +14,7 @@
   `tests/merge_oracle.py`. Verify: both tests pass.
 - [x] 2.2 Run a local mutation run on `troupe.core.config.merge` over unit tests only, and note the result for
   `_check_parents` in the PR. Verify: no surviving mutant in the details it builds, or each survivor explained.
-- [ ] 2.3 `uv run scripts/check.py` passes.
+- [x] 2.3 `uv run scripts/check.py` passes.
 
 ## Workflow follow-up
 
