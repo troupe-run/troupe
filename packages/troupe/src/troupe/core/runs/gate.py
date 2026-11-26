@@ -30,7 +30,14 @@ from troupe.core.identity import Identity
 from troupe.core.notices import Notice
 from troupe.core.runs.aggregate import Run
 from troupe.core.runs.backends import Backends
-from troupe.core.runs.changes import SETTLED, _record, _settle_lock, _settled, _view, keep
+from troupe.core.runs.changes import (
+    SETTLED,
+    keep,
+    record_settling,
+    settle_lock,
+    settled_error,
+    view_of,
+)
 from troupe.core.runs.projections import RunView
 from troupe.core.workspaces import remove_worktree
 
@@ -83,8 +90,8 @@ def troupes_step(
     """troupe's turn at a run's gate, after its end: keep the changes, or pass to the next
     approver and raise its cue. Under the run's settle lock, so a person's accept can't race it."""
     command = troupe_command(store, person)
-    with directory_lock(_settle_lock(theatre, run_id)):
-        view = _view(store, run_id)
+    with directory_lock(settle_lock(theatre, run_id)):
+        view = view_of(store, run_id)
         changes = view.changes() or {}
         if changes.get("state") != "pending":
             return  # settled meanwhile: nothing for troupe to do
@@ -114,7 +121,7 @@ def troupes_step(
                 run.pass_gate(gates.TROUPE, to, files)
                 run.raise_cue(to, brief(started["actor"], outcome, changes, after))
 
-            _record(store, run_id, None, pass_and_cue, command=command)
+            record_settling(store, run_id, None, pass_and_cue, command=command)
 
 
 # Answering a cue
@@ -126,7 +133,7 @@ def _answerable(view: RunView, run_id: str) -> tuple[dict[str, Any], str]:
     if changes is None:
         raise gates.no_cue(run_id, "none")
     if changes["state"] in SETTLED:
-        raise _settled(view, changes)
+        raise settled_error(view, changes)
     if changes["state"] != "waiting":
         raise gates.no_cue(run_id, changes["state"])
     return changes, changes["cue"]["role"]
@@ -149,12 +156,12 @@ def _approve(
 ) -> m.AcceptResult:
     theatre = session.theatre
     store = backends.event_store(session)
-    view = _view(store, request.run)
+    view = view_of(store, request.run)
     changes, role = _answerable(view, view.run_id)
     identity = _holder(store, role)
     data = backends.artifact_store(session).read(changes["diff"])
-    with directory_lock(_settle_lock(theatre, view.run_id)):
-        view = _view(store, view.run_id)  # again, inside the lock: another answer may have won
+    with directory_lock(settle_lock(theatre, view.run_id)):
+        view = view_of(store, view.run_id)  # again, inside the lock: another answer may have won
         changes, role = _answerable(view, view.run_id)
         return keep(
             store,
@@ -178,15 +185,15 @@ def _reject(
 ) -> m.DiscardResult:
     theatre = session.theatre
     store = backends.event_store(session)
-    view = _view(store, request.run)
+    view = view_of(store, request.run)
     changes, role = _answerable(view, view.run_id)
     identity = _holder(store, role)
-    with directory_lock(_settle_lock(theatre, view.run_id)):
-        view = _view(store, view.run_id)
+    with directory_lock(settle_lock(theatre, view.run_id)):
+        view = view_of(store, view.run_id)
         changes, role = _answerable(view, view.run_id)
         if not request.rehearse:
             remove_worktree(store.vcs, theatre, view.run_id, announce)
-            _record(
+            record_settling(
                 store,
                 view.run_id,
                 request.reason,
