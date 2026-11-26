@@ -49,8 +49,10 @@ def test_an_event_whose_parent_isnt_here_is_refused_naming_it_and_its_line() -> 
     assert error.path == "b.jsonl"
     assert error.details == {"line": 3, "event": THIRD, "missingParent": GONE, "onlyIn": []}
     assert error.problem == f"Line 3 of an event segment follows event {GONE}, which isn't here."
-    assert "Restore the file" in error.fix
-    assert "remove this file too" in error.fix
+    assert error.fix == (
+        "Restore the file that held the missing event (git restore), or, if it was removed on "
+        "purpose, remove this file too."
+    )
 
 
 def test_the_first_event_with_a_missing_parent_is_the_one_named() -> None:
