@@ -139,6 +139,12 @@ an entity onto a name the other made SHALL be a conflict between the changes, sh
 - **WHEN** one branch renames `tester` to `qa`, another makes a new actor `qa`, and they are merged
 - **THEN** the rename and the changes that made the other `qa` are in conflict on `actors.qa`
 
+#### Scenario: A rename left out falls back to what its history says
+- **WHEN** a rename onto a name made on another branch is left out, and the entity's earlier history holds a rename
+  and a removal from two branches
+- **THEN** the entity falls back to the name that history works out (here, its name from before them), and config
+  is the same whatever order the events are read in
+
 #### Scenario: Resolving two renames with a rename
 - **WHEN** config has the conflict of two renames of `tester`, and a person runs `troupe config mv actors.tester
   actors.qa`
