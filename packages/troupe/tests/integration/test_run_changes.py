@@ -57,9 +57,16 @@ def repo(tmp_path: Path) -> Repo:
 
 
 def changed_run(made: Harness) -> m.RunSummary:
-    """A worktree run that modified src/a.txt and added out/hello.txt."""
+    """A worktree run that modified src/a.txt and added out/hello.txt, with its changes pending.
+    Its actor declares no effects, so the audit finds both changes outside the declaration and the
+    run ends failed: it reaches no gate (spec: gates, "A worktree run that succeeds with changes
+    passes a gate"), and accept and discard settle it. test_run_gates.py covers runs that do."""
     asked = configured(made, INIT, write("src/a.txt", "two\n"), write("out/hello.txt", "hi\n"), OK)
-    return made.perform(asked).run
+    run = made.perform(asked).run
+    assert run.outcome == "failed"
+    assert run.changes is not None
+    assert run.changes.state == "pending"
+    return run
 
 
 # Requirement: A run's changes can be shown
