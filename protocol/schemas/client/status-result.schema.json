@@ -2,11 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/client/status-result.schema.json",
   "title": "status: result",
-  "description": "The runs asked for, newest first, and any notices from reading the store.",
+  "description": "The runs asked for, newest first, every open cue in the theatre, and any notices from reading the store.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "runs",
+    "cues",
     "notices"
   ],
   "properties": {
@@ -16,10 +17,44 @@
         "$ref": "run.schema.json#/$defs/summary"
       }
     },
+    "cues": {
+      "description": "Every run whose changes wait at its gate for a role's answer, whatever the limit on runs, newest cue first. Empty: nothing is waiting.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/cue"
+      }
+    },
     "notices": {
       "type": "array",
       "items": {
         "$ref": "../notice.schema.json"
+      }
+    }
+  },
+  "$defs": {
+    "cue": {
+      "title": "An open cue",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run",
+        "actor",
+        "role",
+        "raisedAt"
+      ],
+      "properties": {
+        "run": {
+          "$ref": "run.schema.json#/$defs/runId"
+        },
+        "actor": {
+          "$ref": "run.schema.json#/$defs/actorName"
+        },
+        "role": {
+          "$ref": "run.schema.json#/$defs/role"
+        },
+        "raisedAt": {
+          "$ref": "run.schema.json#/$defs/timestamp"
+        }
       }
     }
   }

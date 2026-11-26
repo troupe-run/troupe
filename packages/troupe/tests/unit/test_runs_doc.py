@@ -23,7 +23,7 @@ pytestmark = pytest.mark.docs  # reads docs/ (scripts/check-paths.toml)
 DOC = TESTS_ROOT.parents[2] / "contributing" / "runs.md"
 TEXT = DOC.read_text(encoding="utf-8")
 RUNNERS_DOC = (DOC.parent / "runners.md").read_text(encoding="utf-8")
-PREFIXES = {"client", "perform", "policy", "stage", "theatre", "workspace"}
+PREFIXES = {"client", "gate", "perform", "policy", "stage", "theatre", "workspace"}
 """Codes only runs use. run. and runner. codes are shared with the run host, whose own are in
 contributing/runners.md; every other one is documented here."""
 

@@ -145,6 +145,39 @@ def _run_discard(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) 
     return commands.run_discard(arguments, stdout, stderr)
 
 
+def _configure_approve(parser: argparse.ArgumentParser) -> None:
+    _configure_settle(
+        parser,
+        "check the cue is open and the changes apply cleanly, and name the files, changing nothing",
+    )
+
+
+def _run_approve(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    from troupe.cli import commands  # loaded when the command runs (design D2)
+
+    return commands.run_approve(arguments, stdout, stderr)
+
+
+def _configure_reject(parser: argparse.ArgumentParser) -> None:
+    _configure_settle(parser, "name the worktree that would be removed, removing nothing")
+
+
+APPROVE_HELP = (
+    "Answer a run's open cue by approving its changes: apply them to your files, unstaged, all or "
+    "nothing, and record your approval."
+)
+REJECT_HELP = (
+    "Answer a run's open cue by rejecting its changes: remove its worktree, keeping nothing it "
+    "wrote, and record why. It removes files, not git state."
+)
+
+
+def _run_reject(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    from troupe.cli import commands  # loaded when the command runs (design D2)
+
+    return commands.run_reject(arguments, stdout, stderr)
+
+
 RUN_COMMANDS: tuple[Command, ...] = (
     Command("perform", "Run one actor and record the run.", _configure_perform, _run_perform),
     Command("status", "Show the most recent runs, or one run.", _configure_status, _run_status),
@@ -157,6 +190,8 @@ RUN_COMMANDS: tuple[Command, ...] = (
         _run_accept,
     ),
     Command("discard", DISCARD_HELP, _configure_discard, _run_discard),
+    Command("approve", APPROVE_HELP, _configure_approve, _run_approve),
+    Command("reject", REJECT_HELP, _configure_reject, _run_reject),
 )
 
 # config set and config unset

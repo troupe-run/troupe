@@ -49,6 +49,18 @@ async def _discard(request: Any, session: Session, send: Send) -> Message:  # no
     return await discard(request, session, send)
 
 
+async def _approve(request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401
+    from troupe.core.runs.gate import approve
+
+    return await approve(request, session, send)
+
+
+async def _reject(request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401
+    from troupe.core.runs.gate import reject
+
+    return await reject(request, session, send)
+
+
 def methods() -> Mapping[str, Method]:
     """The commands and queries runs offer through the client protocol, by name."""
     return {
@@ -58,4 +70,6 @@ def methods() -> Mapping[str, Method]:
         "diff": Method(m.DiffRequest, _diff),
         "accept": Method(m.AcceptRequest, _accept),
         "discard": Method(m.DiscardRequest, _discard),
+        "approve": Method(m.ApproveRequest, _approve),
+        "reject": Method(m.RejectRequest, _reject),
     }

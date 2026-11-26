@@ -35,6 +35,11 @@ def new_run(run_id: str | None = None, workspace: dict[str, Any] | None = None) 
         config=["sha256:" + "b" * 64],
         workspace=workspace or {"kind": "theatre"},
         on_context_full={"value": "fail", "source": "default"},
+        approvers=(
+            {"value": ["troupe", "director"], "source": "default"}
+            if (workspace or {}).get("kind") == "worktree"
+            else None
+        ),
     )
 
 

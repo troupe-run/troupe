@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/events/run-gate-passed.schema.json",
+  "title": "Run.GatePassed",
+  "description": "The payload of a pass at a worktree run's gate (topic troupe.core.runs.aggregate:Run.GatePassed): an approver couldn't act, so the gate went to the next approver in the run's list. Only troupe passes, when the run's diff doesn't apply cleanly to the working tree; nothing was applied. At most one, after the run's end and before any cue.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lineage",
+    "timestamp",
+    "approver",
+    "to",
+    "reason",
+    "files"
+  ],
+  "properties": {
+    "lineage": {
+      "$ref": "../lineage.schema.json"
+    },
+    "timestamp": {
+      "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
+    },
+    "approver": {
+      "description": "The approver that passed.",
+      "$ref": "../client/run.schema.json#/$defs/role"
+    },
+    "to": {
+      "description": "The approver the gate went to next.",
+      "$ref": "../client/run.schema.json#/$defs/role"
+    },
+    "reason": {
+      "description": "Why it couldn't act: conflict, the diff doesn't apply cleanly to the working tree. A closed set.",
+      "enum": [
+        "conflict"
+      ]
+    },
+    "files": {
+      "description": "The files whose part of the diff doesn't apply to the working tree, relative to the theatre.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "../client/run.schema.json#/$defs/theatrePath"
+      }
+    }
+  }
+}

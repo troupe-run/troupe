@@ -50,6 +50,8 @@ WRITER: dict[str, Any] = {
     "effects": {"write": ["out/**"]},
     "expect": ["out/hello.txt"],
     "workspace": "worktree",
+    # It waits at its gate for a person, so its diff is still there to read.
+    "approvers": ["director"],
 }
 
 
@@ -67,7 +69,7 @@ def test_an_actor_on_the_openai_style_runner_writes_its_file_in_a_worktree(repo:
         code, out, err = cli(
             "perform", "writer", "--direction", "Write out/hello.txt saying hello."
         )
-        assert code == ExitCode.OK, err
+        assert code == ExitCode.WAITING, err
         assert {r.headers["authorization"] for r in fake.requests} == {f"Bearer {KEY}"}
     run_id = out.split()[1]
     assert "succeeded" in out + err

@@ -394,7 +394,7 @@ def _git(repo: Repo, *args: str) -> None:
     )
 
 
-def test_the_printed_steps_of_a_scripted_audition_give_a_successful_run_offline(
+def test_the_printed_steps_of_a_scripted_audition_give_a_run_that_succeeds_and_waits_offline(
     repo: Repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     code, out, _ = cli("init", "--audition", "--runner", "scripted")
@@ -417,8 +417,11 @@ def test_the_printed_steps_of_a_scripted_audition_give_a_successful_run_offline(
     argv = shlex.split(perform)
     assert argv[:2] == ["troupe", "perform"]
     code, out, err = cli(*argv[1:])
-    assert code == ExitCode.OK, err
+    # It wrote its file, and waits at its gate for director (spec: cli, "Init prints the next
+    # steps for its audition").
+    assert code == ExitCode.WAITING, err
     assert out.strip().endswith("succeeded")
+    assert "waits at its gate for director" in err
 
 
 def test_the_printed_steps_of_an_ollama_audition_give_a_successful_run_with_a_stand_in(

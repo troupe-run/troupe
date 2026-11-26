@@ -27,6 +27,7 @@ ENDED: dict[str, Any] = {
     "effectCheck": {"kind": "none"},
     "workspace": {"kind": "worktree", "path": WORKTREE, "base": BASE, "dirty": False},
     "changes": {"state": "pending", "diff": DIFF, "worktree": WORKTREE},
+    "approvers": {"value": ["troupe", "director"], "source": "default"},
     "state": "ended",
     "outcome": "failed",
     "events": 42,
@@ -81,6 +82,7 @@ def test_the_summary_of_an_ended_worktree_run_with_every_line() -> None:
         "  changes: pending",
         f"  diff: {DIFF}",
         f"  worktree: {WORKTREE}",
+        "  approvers: troupe, director (default)",
         "  notices:",
         "    2026-11-21T09:15:00.000Z run.silent: Quiet.",
     ]
@@ -97,6 +99,7 @@ def test_the_summary_of_a_running_theatre_run_started_by_no_one_known() -> None:
         },
         workspace={"kind": "theatre"},
         changes=None,
+        approvers=None,
         state="running",
         outcome=None,
         endedAt=None,
@@ -134,7 +137,8 @@ def test_a_recording_that_stopped_at_a_notice_names_the_notice() -> None:
 
 def _changes_lines(changes: dict[str, Any]) -> list[str]:
     lines = render_run(_run(changes=changes))
-    return lines[lines.index(f"  transcript: {TRANSCRIPT}") + 1 :]
+    # Up to the approvers line, which every worktree run's summary ends its changes with.
+    return lines[lines.index(f"  transcript: {TRANSCRIPT}") + 1 : -1]
 
 
 def test_pending_changes_name_their_counts_and_what_was_left_out() -> None:
@@ -207,7 +211,7 @@ def test_changes_that_could_not_be_captured_name_the_error() -> None:
 def _audit(outside: list[dict[str, Any]], workspace: str = "worktree") -> list[str]:
     fields: dict[str, Any] = {"audit": {"outside": outside}}
     if workspace == "theatre":
-        fields |= {"workspace": {"kind": "theatre"}, "changes": None}
+        fields |= {"workspace": {"kind": "theatre"}, "changes": None, "approvers": None}
     return render_audit(_run(**fields))
 
 
@@ -289,3 +293,63 @@ def test_a_list_line_of_a_run_still_going_shows_its_state() -> None:
         audit=None,
     )
     assert render_run_line(run).startswith(f"{RUN_ID}  running              tester ")
+
+
+# Requirement: A run's summary shows its gate (spec: runs, cli; manual-gates)
+
+
+def test_a_runs_gate_steps_follow_its_approvers_in_order() -> None:
+    at = "2026-11-21T09:17:00.000Z"
+    run = _run(
+        changes={"state": "accepted", "settledAt": at, "files": ["src/a.txt"]},
+        gate=[
+            {
+                "step": "passed",
+                "approver": "troupe",
+                "to": "director",
+                "files": ["src/a.txt"],
+                "at": at,
+            },
+            {"step": "cue", "role": "director", "at": at},
+            {
+                "step": "approved",
+                "role": "director",
+                "actor": {"kind": "human", "id": "ada@example.com", "source": "vcs"},
+                "reason": "fine",
+                "at": at,
+            },
+        ],
+    )
+    lines = render_run(run)
+    start = lines.index("  approvers: troupe, director (default)")
+    assert lines[start + 1 : start + 4] == [
+        f"  gate: troupe passed to director at {at}: src/a.txt conflicts with your files",
+        f"  gate: cue for director at {at}",
+        f"  gate: approved by ada@example.com as director at {at}: fine",
+    ]
+
+
+def test_troupes_own_approval_names_it_by_its_system_id() -> None:
+    at = "2026-11-21T09:17:00.000Z"
+    run = _run(
+        changes={"state": "accepted", "settledAt": at, "files": ["src/a.txt"]},
+        gate=[
+            {
+                "step": "approved",
+                "role": "troupe",
+                "actor": {"kind": "system", "id": "core@build-01"},
+                "at": at,
+            }
+        ],
+    )
+    assert f"  gate: approved by core@build-01 as troupe at {at}" in render_run(run)
+
+
+def test_waiting_changes_name_the_role_they_wait_for() -> None:
+    waiting = {
+        "state": "waiting",
+        "diff": DIFF,
+        "worktree": WORKTREE,
+        "cue": {"role": "director", "raisedAt": "2026-11-21T09:17:00.000Z"},
+    }
+    assert "  changes: waiting for director" in render_run(_run(changes=waiting))

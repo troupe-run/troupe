@@ -42,8 +42,12 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
   rename is refused, and its fix names `qa`.
 - **`troupe diff`** shows what a run in its own worktree changed, as git's binary diff, byte for byte, so you can
   pipe it to `git apply`.
-- **`troupe accept`** applies a worktree run's changes to your files, unstaged, all or nothing, then removes its
-  worktree. If they don't apply cleanly it changes nothing and names the files.
+- **`troupe approve`** and **`troupe reject`** answer a run that waits at its gate. Approve keeps its changes:
+  it applies them to your files, unstaged, all or nothing, and records your approval. Reject removes its worktree.
+  Accept and discard are refused for such a run, and name these instead.
+- **`troupe accept`** applies the changes of a worktree run that reached no gate (one that didn't succeed) to your
+  files, unstaged, all or nothing, then removes its worktree. If they don't apply cleanly it changes nothing and
+  names the files.
 - **`troupe discard`** removes a worktree run's worktree. It removes files, not git state: branches, tags, stashes,
   config, hooks or pushes the run made stay.
 - **`troupe config set`**, **`config unset`** and **`config get`** change and show config. Each change is recorded
@@ -68,13 +72,16 @@ runs](../the-company/performances-and-runs.md) describes runs, their states and 
 **`perform` names an actor, and config says the rest:** its runner (`anthropic`, `claude-code`, `mistralrs`,
 `ollama`, `openai` or `scripted`), the runner's options, the runtime and model it uses, if its runner takes one, its
 effects, its effect check (`expect`: the files a run must create or change, relative to the theatre's root, where
-`[]` means no check), its character, its workspace and what it does when its context is full (`onContextFull`).
+`[]` means no check), its character, its workspace, what it does when its context is full (`onContextFull`), and its
+approvers.
 `--direction` says what this run is asked to do. [Point actors at a service](../stagecraft/runtimes.md) says how a
 runtime is chosen and set.
 
-**A run works in its own git worktree** by default, made from your latest commit: your files change only when you
-`troupe accept` it. An actor with `workspace: theatre` works in your files directly instead. See
-[Workspaces](../the-company/performances-and-runs.md#workspaces).
+**A run works in its own git worktree** by default, made from your latest commit: your files change only when its
+work is kept at its gate, by troupe when it applies cleanly, or by `troupe approve` when it waits for you. `perform`
+exits 4 when the run succeeded and its work waits. An actor with `workspace: theatre` works in your files directly
+instead. See [Workspaces](../the-company/performances-and-runs.md#workspaces) and
+[Gates](../the-company/gates-and-decisions.md).
 
 **A config value on the command line is typed by its schema.** A string field takes the text as given, a number or
 boolean is parsed strictly (`true`, never `yes`), and a list or a group is JSON. `<path>=@<file>` reads a value
@@ -109,7 +116,7 @@ troupe perform tester --direction "write the hello file"
 troupe logs 1a2b3c4d --follow        # from another terminal, while it runs
 troupe status 1a2b3c4d
 troupe diff 1a2b3c4d | less
-troupe accept 1a2b3c4d --reason "looks right"
+troupe approve 1a2b3c4d --reason "looks right"   # when it waits at its gate
 ```
 
 **Ctrl-C** during `perform` cancels the run, records it as `cancelled`, and exits 130. Pressing it again only says
@@ -209,6 +216,34 @@ Remove a worktree run's worktree, keeping nothing it wrote. It removes files, no
 
 ```text
 troupe discard <run> [--reason <reason>] [--rehearse]
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `<run>` | Yes | A run's id, or at least its first 8 characters |
+| `--reason <reason>` | No | Why, recorded in the lineage |
+| `--rehearse` | No | Name the worktree that would be removed, removing nothing |
+
+### `troupe approve`
+
+Answer a run's open cue by approving its changes: apply them to your files, unstaged, all or nothing, and record your approval.
+
+```text
+troupe approve <run> [--reason <reason>] [--rehearse]
+```
+
+| Argument | Required | What it is |
+|---|---|---|
+| `<run>` | Yes | A run's id, or at least its first 8 characters |
+| `--reason <reason>` | No | Why, recorded in the lineage |
+| `--rehearse` | No | Check the cue is open and the changes apply cleanly, and name the files, changing nothing |
+
+### `troupe reject`
+
+Answer a run's open cue by rejecting its changes: remove its worktree, keeping nothing it wrote, and record why. It removes files, not git state.
+
+```text
+troupe reject <run> [--reason <reason>] [--rehearse]
 ```
 
 | Argument | Required | What it is |
@@ -380,5 +415,6 @@ went wrong and how to fix it.
 | 1 | `FAILURE` | The command could not complete. The error says why and what to do. |
 | 2 | `USAGE` | The command line was not understood: an unknown command or flag, or a malformed value. |
 | 3 | `WOULD_CHANGE` | A rehearsal (`--rehearse`) found that the command would succeed and change something: record a change, write a file, or start a run. A rehearsal with nothing to do exits 0, and one that would be refused exits with the refusal's own code, so CI can tell the three apart. |
+| 4 | `WAITING` | `troupe perform`'s run succeeded, and its work waits at its gate for a role's answer: see it with `troupe diff`, then `troupe approve` or `troupe reject` it. Its changes aren't in your files yet, so a script that goes on only once the work is kept can tell. |
 | 130 | `CANCELLED` | You cancelled the command with Ctrl-C, and it stopped cleanly: `troupe perform` records the run as `cancelled`. 130 is the shell's code for an interrupt (128 + SIGINT), and troupe uses it on every platform. |
 <!-- end generated: exit-codes -->

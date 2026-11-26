@@ -19,6 +19,10 @@ class ExitCode(IntEnum):
     """A rehearsal (`--rehearse`) found that the command would succeed and change something: record
     a change, write a file, or start a run. A rehearsal with nothing to do exits 0, and one that
     would be refused exits with the refusal's own code, so CI can tell the three apart."""
+    WAITING = 4
+    """`troupe perform`'s run succeeded, and its work waits at its gate for a role's answer: see
+    it with `troupe diff`, then `troupe approve` or `troupe reject` it. Its changes aren't in your
+    files yet, so a script that goes on only once the work is kept can tell."""
     CANCELLED = 130
     """You cancelled the command with Ctrl-C, and it stopped cleanly: `troupe perform` records the
     run as `cancelled`. 130 is the shell's code for an interrupt (128 + SIGINT), and troupe uses it

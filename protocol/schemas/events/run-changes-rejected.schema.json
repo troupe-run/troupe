@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/events/run-changes-rejected.schema.json",
+  "title": "Run.ChangesRejected",
+  "description": "The payload of a rejection at a worktree run's gate (topic troupe.core.runs.aggregate:Run.ChangesRejected): the role the open cue was for removed the run's worktree, and nothing reached the theatre. The reason is in the lineage. Final: nothing else settles the run's changes after it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lineage",
+    "timestamp",
+    "role"
+  ],
+  "properties": {
+    "lineage": {
+      "$ref": "../lineage.schema.json"
+    },
+    "timestamp": {
+      "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
+    },
+    "role": {
+      "description": "The role that rejected, which the cue was for.",
+      "$ref": "../client/run.schema.json#/$defs/role"
+    }
+  }
+}

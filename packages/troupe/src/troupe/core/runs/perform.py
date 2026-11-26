@@ -33,7 +33,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
-from troupe.core import defaults, runtimes
+from troupe.core import defaults, gates, runtimes
 from troupe.core.artifacts import ArtifactStore
 from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Send
@@ -58,6 +58,7 @@ from troupe.core.runners.effects import (
 from troupe.core.runners.host import RunnerCommand, RunRequest, not_started, run_actor
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import RunOutcome
+from troupe.core.runs import gate
 from troupe.core.runs.aggregate import Run
 from troupe.core.runs.backends import PERFORM_PID_FILE
 from troupe.core.runs.backends import Backends as Backends
@@ -156,6 +157,14 @@ class _What:
     model: str | None = None
     on_context_full: str | None = None
     """The actor's own onContextFull; None when it doesn't set one."""
+    approvers: tuple[str, ...] | None = None
+    """The actor's own approvers; None when it doesn't set any."""
+
+    def resolved_approvers(self) -> gates.Approvers | None:
+        """The approvers its runs' gate tries: None for a run in the theatre, which has none."""
+        if self.workspace != "worktree":
+            return None
+        return gates.resolve(self.approvers)
 
 
 @dataclass(frozen=True)
@@ -241,7 +250,18 @@ def _from_config(merged: Merged, name: str) -> _What:
         runtime=actor.get("runtime"),
         model=actor.get("model"),
         on_context_full=actor.get("onContextFull"),
+        approvers=tuple(actor["approvers"]) if "approvers" in actor else None,
     )
+
+
+def _approvers_data(what: _What) -> dict[str, object] | None:
+    resolved = what.resolved_approvers()
+    return resolved.to_data() if resolved is not None else None
+
+
+def _rehearsed_approvers(what: _What) -> m.ApproversData | None:
+    data = _approvers_data(what)
+    return m.ApproversData.from_data(data) if data is not None else None
 
 
 def _summary(text: str | None) -> m.TextSummary | None:
@@ -352,6 +372,7 @@ class _Recorder:
             workspace=self.workspace,
             on_context_full=self.context_full.to_data(),
             runtime=self.runtime.to_data() if self.runtime is not None else None,
+            approvers=_approvers_data(self.what),
         )
         # The config version must still be here as the start is written: a person's drop of an
         # abandoned edit between this perform's sync and now refuses the start, never leaving a
@@ -499,7 +520,24 @@ class _Recorder:
         run = self._run()
         recording = self.failure.to_data() if self.failure is not None else None
         run.end(outcome, recording, changes)
-        self.agent.record(run.collect_events())
+        ended = run.collect_events()
+        approvers = self.what.resolved_approvers()
+        if (
+            approvers is None
+            or not gate.reaches_gate(outcome.get("outcome"), changes)
+            or not gate.first_is_a_person(approvers.value)
+            or changes is None
+        ):
+            self.agent.record(ended)
+            return
+        # A person first: the cue is recorded with the end, so no perform that stops after the
+        # end leaves the run unasked (manual-gates design D3).
+        run.raise_cue(approvers.value[0], gate.brief(self.what.actor, "succeeded", changes))
+        cue = run.collect_events()
+        troupe = gate.troupe_command(self.store, self.person)
+        self.store.record_with_lineages(
+            [*ended, *cue], [self.agent.lineage()] * len(ended) + [troupe.lineage()] * len(cue)
+        )
 
     async def end(self, outcome: dict[str, Any], changes: dict[str, Any] | None) -> None:
         """Record the run's end, once every run event and notice raised before it is recorded."""
@@ -577,6 +615,7 @@ async def perform(
                 runtime=(
                     m.ResolvedRuntime.from_data(runtime.to_data()) if runtime is not None else None
                 ),
+                approvers=_rehearsed_approvers(what),
             )
         )
     # Now for real, just before the run: hand edits recorded, files written. The run uses the
@@ -688,11 +727,50 @@ async def perform(
                 ) from error
             if recorder.failure is not None:
                 raise _recording_failed(run_id, recorder.failure, outcome, ended=None)
+            await _troupes_turn(
+                what,
+                str(data.get("outcome")),
+                changes,
+                artifacts,
+                store,
+                theatre,
+                run_id,
+                person,
+                announce,
+            )
             history = await asyncio.to_thread(store.history, UUID(run_id))
         finally:
             recorder.stop()
     [view] = fold_runs(history).values()
     return m.PerformResult(run=view.summary("ended"))
+
+
+async def _troupes_turn(
+    what: _What,
+    outcome: str,
+    changes: dict[str, Any] | None,
+    artifacts: ArtifactStore,
+    store: EventStore,
+    theatre: Path,
+    run_id: str,
+    person: Command,
+    announce: Callable[[Notice], None],
+) -> None:
+    """troupe's turn at a run's gate, when its list starts with troupe: keep the changes, or pass
+    and raise a cue (spec: gates; manual-gates design D3). A list that starts with a person had
+    its cue recorded with the end."""
+    approvers = what.resolved_approvers()
+    if (
+        approvers is None
+        or changes is None
+        or not gate.reaches_gate(outcome, changes)
+        or gate.first_is_a_person(approvers.value)
+    ):
+        return
+    patch = await asyncio.to_thread(artifacts.read, changes["diff"])
+    await asyncio.to_thread(
+        gate.troupes_step, store, theatre, patch, run_id, approvers.value, person, announce
+    )
 
 
 async def _could_not_start(

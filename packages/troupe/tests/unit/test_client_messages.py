@@ -121,7 +121,11 @@ SHARED = st.fixed_dictionaries(
 @st.composite
 def run_changes(draw: st.DrawFn) -> dict[str, Any]:
     """A worktree run's changes, in each state, with what that state has."""
-    state = draw(st.sampled_from(["pending", "accepted", "discarded", "none", "uncaptured"]))
+    state = draw(
+        st.sampled_from(
+            ["waiting", "pending", "accepted", "discarded", "rejected", "none", "uncaptured"]
+        )
+    )
     data: dict[str, Any] = {"state": state}
     counts = {"added": 0, "modified": 0, "deleted": 0, "leftOut": draw(st.integers(0, 9))}
     if state == "uncaptured":
@@ -133,11 +137,59 @@ def run_changes(draw: st.DrawFn) -> dict[str, Any]:
         data.update(counts, added=draw(st.integers(1, 9)), diff=draw(HASHES))
     if draw(st.booleans()):
         data["shared"] = draw(SHARED)
-    if state in ("accepted", "discarded"):
+    if state in ("accepted", "discarded", "rejected"):
         data["settledAt"] = draw(TIMES)
     else:
         data["worktree"] = ".troupe/local/worktrees/0f8fad5b-d9cb-469f-a165-70867728950e"
+    if state == "waiting":
+        data["cue"] = {"role": "director", "raisedAt": draw(TIMES)}
     return data
+
+
+ROLES = st.sampled_from(["troupe", "director"])
+APPROVERS = st.fixed_dictionaries(
+    {
+        "value": st.sampled_from([["troupe", "director"], ["director"]]),
+        "source": st.sampled_from(["actor", "default"]),
+    }
+)
+ANSWERERS = st.sampled_from(
+    [
+        {"kind": "system", "id": "core@build-01"},
+        {"kind": "human", "id": "ada@example.com", "source": "vcs"},
+    ]
+)
+
+
+@st.composite
+def gate_steps(draw: st.DrawFn) -> list[dict[str, Any]]:
+    """A run's gate steps, in an order a gate records them."""
+    steps: list[dict[str, Any]] = []
+    if draw(st.booleans()):
+        steps.append(
+            {
+                "step": "passed",
+                "approver": "troupe",
+                "to": "director",
+                "files": ["src/a.txt"],
+                "at": draw(TIMES),
+            }
+        )
+    cued: bool = draw(st.booleans())
+    if steps or cued:
+        steps.append({"step": "cue", "role": "director", "at": draw(TIMES)})
+    answered: bool = draw(st.booleans())
+    if answered:
+        answer: dict[str, Any] = {
+            "step": draw(st.sampled_from(["approved", "rejected"])),
+            "role": draw(ROLES),
+            "actor": draw(ANSWERERS),
+            "at": draw(TIMES),
+        }
+        if draw(st.booleans()):
+            answer["reason"] = "fine"
+        steps.append(answer)
+    return steps
 
 
 RUN_CHANGES = run_changes()
@@ -210,6 +262,9 @@ def summaries(draw: st.DrawFn) -> dict[str, Any]:
             summary["transcriptFormat"] = draw(st.sampled_from(["native", "kinds"]))
     if summary["workspace"] != {"kind": "theatre"}:
         summary["changes"] = draw(RUN_CHANGES)
+        summary["approvers"] = draw(APPROVERS)
+        if steps := draw(gate_steps()):
+            summary["gate"] = steps
     return summary
 
 
@@ -287,7 +342,21 @@ CASES: list[tuple[object, str, st.SearchStrategy[Any]]] = [
         m.StatusResult,
         "status-result.schema.json",
         st.fixed_dictionaries(
-            {"runs": st.lists(SUMMARIES, max_size=2), "notices": st.lists(NOTICES, max_size=2)}
+            {
+                "runs": st.lists(SUMMARIES, max_size=2),
+                "cues": st.lists(
+                    st.fixed_dictionaries(
+                        {
+                            "run": RUN_IDS,
+                            "actor": st.just("writer"),
+                            "role": st.just("director"),
+                            "raisedAt": TIMES,
+                        }
+                    ),
+                    max_size=2,
+                ),
+                "notices": st.lists(NOTICES, max_size=2),
+            }
         ),
     ),
     (

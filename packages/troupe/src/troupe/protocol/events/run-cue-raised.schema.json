@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/events/run-cue-raised.schema.json",
+  "title": "Run.CueRaised",
+  "description": "The payload of a cue at a worktree run's gate (topic troupe.core.runs.aggregate:Run.CueRaised): an open request to a role a person holds, to approve or reject the run's changes, with a brief that makes sense without the run's other events. At most one. The run's changes wait until the role answers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lineage",
+    "timestamp",
+    "role",
+    "brief"
+  ],
+  "properties": {
+    "lineage": {
+      "$ref": "../lineage.schema.json"
+    },
+    "timestamp": {
+      "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
+    },
+    "role": {
+      "description": "The role the cue is for.",
+      "$ref": "../client/run.schema.json#/$defs/role"
+    },
+    "brief": {
+      "description": "What the role needs to answer: whose run it was, how it ended, what it changed and where the diff is, and why the cue came to this role.",
+      "$ref": "#/$defs/brief"
+    }
+  },
+  "$defs": {
+    "brief": {
+      "title": "Brief",
+      "description": "A cue's brief.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor",
+        "outcome",
+        "diff",
+        "added",
+        "modified",
+        "deleted"
+      ],
+      "properties": {
+        "actor": {
+          "description": "The actor whose run it was.",
+          "$ref": "../client/run.schema.json#/$defs/actorName"
+        },
+        "outcome": {
+          "description": "How the run ended.",
+          "$ref": "../client/run.schema.json#/$defs/outcome"
+        },
+        "diff": {
+          "description": "The diff's artifact reference, as the run's end recorded it.",
+          "$ref": "../lineage.schema.json#/$defs/hash"
+        },
+        "added": {
+          "description": "How many files the diff adds.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "modified": {
+          "description": "How many files the diff modifies.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "deleted": {
+          "description": "How many files the diff deletes.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "after": {
+          "description": "The pass that brought the cue here. Absent: the role was first in the run's approvers.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "approver",
+            "reason",
+            "files"
+          ],
+          "properties": {
+            "approver": {
+              "description": "The approver that passed.",
+              "$ref": "../client/run.schema.json#/$defs/role"
+            },
+            "reason": {
+              "description": "Why it passed.",
+              "enum": [
+                "conflict"
+              ]
+            },
+            "files": {
+              "description": "The files whose part of the diff doesn't apply to the working tree, relative to the theatre.",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "../client/run.schema.json#/$defs/theatrePath"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

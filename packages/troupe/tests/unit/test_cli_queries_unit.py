@@ -19,7 +19,13 @@ import pytest
 
 from cli_core_stand_in import StandIn, stand_in
 from troupe.cli.commands import _write_exactly
-from troupe.cli.render import render_audit, render_log_entry, render_run, render_run_line
+from troupe.cli.render import (
+    render_audit,
+    render_gate,
+    render_log_entry,
+    render_run,
+    render_run_line,
+)
 from troupe.core.client.messages import (
     AcceptResult,
     DiffResult,
@@ -75,6 +81,7 @@ RUN: dict[str, Any] = {
     "transcriptFormat": "native",
     "stderr": EMPTY,
     "changes": PENDING,
+    "approvers": {"value": ["troupe", "director"], "source": "default"},
 }
 EVENTS: list[dict[str, Any]] = [
     {
@@ -126,6 +133,7 @@ def _run(**fields: Any) -> dict[str, Any]:  # noqa: ANN401
 RUNNING = _run(
     workspace={"kind": "theatre"},
     changes=None,
+    approvers=None,
     state="running",
     outcome=None,
     endedAt=None,
@@ -136,8 +144,14 @@ RUNNING = _run(
 )
 
 
-def _status(*runs: dict[str, Any], notices: tuple[dict[str, Any], ...] = ()) -> StatusResult:
-    return StatusResult.from_data({"runs": list(runs), "notices": list(notices)})
+def _status(
+    *runs: dict[str, Any],
+    notices: tuple[dict[str, Any], ...] = (),
+    cues: tuple[dict[str, Any], ...] = (),
+) -> StatusResult:
+    return StatusResult.from_data(
+        {"runs": list(runs), "cues": list(cues), "notices": list(notices)}
+    )
 
 
 def _logs(run: dict[str, Any], log: list[dict[str, Any]], *notices: dict[str, Any]) -> LogsResult:
@@ -213,6 +227,7 @@ def test_logs_prints_the_log_then_the_runs_outcome(core: StandIn) -> None:
         *(render_log_entry(entry) for entry in log),
         f"run {RUN_ID}: succeeded",
         *render_audit(_run()),
+        *render_gate(_run()),
     ]
     assert ran.err == NOTICE_LINES
 
@@ -226,7 +241,12 @@ def test_logs_names_a_renamed_actor_and_the_audit(core: StandIn) -> None:
     run = _run(actorNow="star", audit=OUTSIDE)
     core.reply("logs", _logs(run, []))
     ran = core.run("logs", SHORT)
-    assert ran.out == [f"run {RUN_ID}: succeeded", "  actor: lead (now star)", *render_audit(run)]
+    assert ran.out == [
+        f"run {RUN_ID}: succeeded",
+        "  actor: lead (now star)",
+        *render_audit(run),
+        *render_gate(run),
+    ]
     assert len(render_audit(run)) > 0
 
 
@@ -247,6 +267,7 @@ def test_followed_entries_are_shown_as_they_come_and_not_again(core: StandIn) ->
         render_log_entry(EVENTS[1]),
         f"run {RUN_ID}: succeeded",
         *render_audit(_run()),
+        *render_gate(_run()),
     ]
     assert ran.err == NOTICE_LINES
 
@@ -426,3 +447,79 @@ def test_ctrl_c_during_a_command_that_cant_be_cancelled_changes_nothing(
     assert pressed == calm
     assert core.calls[1].session.cancel.requested
     assert core.calls[1].session.theatre == Path.cwd()
+
+
+# Requirement: Approve and reject commands (spec: cli; manual-gates)
+
+
+def test_approve_sends_the_run_and_reason_and_lists_the_files_it_kept(core: StandIn) -> None:
+    result = {"run": RUN_ID, "files": ["AUDITION.md"], "rehearsed": False, "notices": []}
+    core.reply("approve", AcceptResult.from_data(result))
+    ran = core.run("approve", SHORT, "--reason", "fine")
+    assert core.requests == [("approve", {"run": SHORT, "reason": "fine"})]
+    assert ran.code == ExitCode.OK
+    assert ran.out == [f"run {RUN_ID} approved, its changes kept, unstaged:", "  AUDITION.md"]
+
+
+def test_a_rehearsed_approve_says_what_it_would_change_and_exits_would_change(
+    core: StandIn,
+) -> None:
+    result = {"run": RUN_ID, "files": ["AUDITION.md"], "rehearsed": True, "notices": []}
+    core.reply("approve", AcceptResult.from_data(result))
+    ran = core.run("approve", SHORT, "--rehearse")
+    assert core.requests == [("approve", {"run": SHORT, "rehearse": True})]
+    assert ran.code == ExitCode.WOULD_CHANGE
+    assert ran.out == [f"approving run {RUN_ID} would change:", "  AUDITION.md"]
+
+
+def test_reject_says_what_it_removed_and_what_it_leaves(core: StandIn) -> None:
+    result = {"run": RUN_ID, "worktree": WORKTREE, "rehearsed": False, "notices": []}
+    core.reply("reject", DiscardResult.from_data(result))
+    ran = core.run("reject", SHORT, "--reason", "wrong file")
+    assert core.requests == [("reject", {"run": SHORT, "reason": "wrong file"})]
+    assert ran.code == ExitCode.OK
+    assert ran.out == [f"run {RUN_ID} rejected: removed {WORKTREE}"]
+    assert ran.err[-1].startswith("troupe: rejecting removes files, not git state")
+
+
+def test_a_rehearsed_reject_names_the_worktree_and_exits_would_change(core: StandIn) -> None:
+    result = {"run": RUN_ID, "worktree": WORKTREE, "rehearsed": True, "notices": []}
+    core.reply("reject", DiscardResult.from_data(result))
+    ran = core.run("reject", SHORT, "--rehearse")
+    assert ran.code == ExitCode.WOULD_CHANGE
+    assert ran.out == [f"rejecting run {RUN_ID} would remove {WORKTREE}"]
+
+
+# Requirement: Status shows open cues and a run's gate (spec: cli)
+
+
+def test_status_shows_each_open_cue_before_the_runs(core: StandIn) -> None:
+    cue = {
+        "run": RUN_ID,
+        "actor": "writer",
+        "role": "director",
+        "raisedAt": "2026-11-26T07:00:00.000Z",
+    }
+    core.reply("status", _status(_run(), cues=(cue,)))
+    ran = core.run("status")
+    assert ran.out[0] == (
+        f"waiting: run {SHORT} of writer for director, since 2026-11-26T07:00:00.000Z: "
+        f"troupe approve {SHORT} or troupe reject {SHORT}"
+    )
+    assert ran.out[1:] == [render_run_line(_run())]
+
+
+def test_a_waiting_run_is_shown_as_waiting_in_the_list(core: StandIn) -> None:
+    waiting = {
+        **PENDING,
+        "state": "waiting",
+        "cue": {"role": "director", "raisedAt": "2026-11-26T07:00:00.000Z"},
+    }
+    line = render_run_line(_run(changes=waiting))
+    assert f"{RUN_ID}  succeeded, waiting" in line
+
+
+def test_status_of_a_run_shows_its_approvers(core: StandIn) -> None:
+    core.reply("status", _status(_run()))
+    ran = core.run("status", SHORT)
+    assert "  approvers: troupe, director (default)" in ran.out

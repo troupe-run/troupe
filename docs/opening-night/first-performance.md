@@ -97,7 +97,8 @@ While it runs, troupe shows its progress on standard error. When it succeeds, st
 
 The run worked in its own git worktree, under `.troupe/local/worktrees/`, so your files haven't changed yet:
 `NOTES.md` is in the worktree, not beside your files. That's a worktree's whole point: you see what an actor did
-before any of it is yours.
+before any of it is yours. The example actor's work then waits at a [gate](../the-company/gates-and-decisions.md)
+for you, so `troupe perform` says the run waits for `director`, the role you hold, and exits 4 rather than 0.
 
 ## Changes the run won't see
 
@@ -116,14 +117,27 @@ troupe doesn't commit for you. If the run needs your changes, commit them, or st
 
 ```sh
 troupe diff <run>
-troupe accept <run>
+troupe approve <run>
 ```
 
-`troupe diff <run>` shows what the run changed, as a diff. `troupe accept <run>` applies it to your files, unstaged,
-so `NOTES.md` is now beside your files and `git diff` shows it like any change of your own. `troupe discard <run>`
-throws it away instead. A worktree catches an actor's mistakes, not its intent: it can still write outside the
-worktree, and [discarding doesn't undo](../the-company/performances-and-runs.md#workspaces) what it does to git
-itself.
+`troupe diff <run>` shows what the run changed, as a diff. `troupe approve <run>` keeps it: it applies the diff to
+your files, unstaged, so `NOTES.md` is now beside your files and `git diff` shows it like any change of your own,
+and it records your approval. `troupe reject <run>` throws it away instead. A worktree catches an actor's mistakes,
+not its intent: it can still write outside the worktree, and [throwing it away doesn't
+undo](../the-company/performances-and-runs.md#workspaces) what it does to git itself.
+
+## Keep clean work without asking
+
+Waiting for you suits a first run. An actor that doesn't say who approves its work has its work kept as soon as the
+run ends, when the changes apply cleanly to your files: troupe approves them itself, and the record says so. When
+they don't apply, because you've changed the same lines since, the run waits for you, as above. To let `lead`'s
+runs through, remove its approvers:
+
+```sh
+troupe config unset actors.lead.approvers
+```
+
+Set them back to `["director"]` for an actor whose every run you want to see first.
 
 ## Read it back
 
@@ -163,7 +177,7 @@ troupe perform lead
 
 Allow the local stage first, as above, if this shell doesn't have it. The run writes `AUDITION.md` in its worktree,
 and troupe checks it did: the actor's `expect` names the file, and a run that didn't create or change it fails.
-`troupe diff`, `accept`, `status` and `logs` work as they do above.
+`troupe diff`, `approve`, `status` and `logs` work as they do above.
 
 ## Try it with a model on your own machine
 

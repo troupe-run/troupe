@@ -64,6 +64,7 @@ RUN: dict[str, Any] = {
     "transcriptFormat": "native",
     "stderr": EMPTY,
     "changes": PENDING,
+    "approvers": {"value": ["troupe", "director"], "source": "default"},
 }
 EVENTS: list[dict[str, Any]] = [
     {
@@ -137,12 +138,12 @@ STARTING = (
 )
 IN_WORKTREE = (
     f"troupe: run {SHORT} works in its own worktree, {WORKTREE}; your files change only when "
-    "you accept it."
+    "its work is kept at its gate."
 )
 
 
 def _in_theatre(**fields: Any) -> PerformResult:  # noqa: ANN401
-    return _run(workspace={"kind": "theatre"}, changes=None, **fields)
+    return _run(workspace={"kind": "theatre"}, changes=None, approvers=None, **fields)
 
 
 def _run(**fields: Any) -> PerformResult:  # noqa: ANN401
@@ -347,3 +348,75 @@ def test_the_run_starts_in_a_session_for_the_theatre_found_from_here(
     assert call.session.theatre == tmp_path.resolve()
     assert dict(call.session.env) == dict(os.environ)
     assert not call.session.cancel.requested
+
+
+# Requirement: Perform says where a worktree run works (spec: cli; manual-gates)
+# Requirement: Perform's exit code follows the run's outcome
+
+AT = "2026-11-26T06:56:25.000Z"
+TROUPE = {"kind": "system", "id": "core@build-01"}
+
+
+def test_a_run_kept_at_its_gate_names_the_files_and_who_approved_and_exits_0(
+    core: StandIn,
+) -> None:
+    kept = {
+        **{k: v for k, v in PENDING.items() if k != "worktree"},
+        "state": "accepted",
+        "settledAt": AT,
+        "files": ["AUDITION.md"],
+    }
+    gate = [{"step": "approved", "role": "troupe", "actor": TROUPE, "at": AT}]
+    core.reply("perform", _run(changes=kept, gate=gate), _started())
+    ran = core.run("perform", "lead")
+    assert ran.code == ExitCode.OK
+    assert ran.out == [f"run {RUN_ID} succeeded"]
+    assert ran.err[-1] == (
+        f"troupe: run {SHORT}'s changes were kept, approved by troupe, unstaged: AUDITION.md."
+    )
+
+
+def test_a_run_waiting_after_a_conflict_names_the_role_the_files_and_answers_and_exits_4(
+    core: StandIn,
+) -> None:
+    waiting = {**PENDING, "state": "waiting", "cue": {"role": "director", "raisedAt": AT}}
+    gate = [
+        {
+            "step": "passed",
+            "approver": "troupe",
+            "to": "director",
+            "files": ["src/a.txt"],
+            "at": AT,
+        },
+        {"step": "cue", "role": "director", "at": AT},
+    ]
+    core.reply("perform", _run(changes=waiting, gate=gate), _started())
+    ran = core.run("perform", "lead")
+    assert ran.code == ExitCode.WAITING
+    assert int(ran.code) == 4
+    assert ran.out == [f"run {RUN_ID} succeeded"]
+    assert ran.err[-1] == (
+        f"troupe: run {SHORT} waits at its gate for director because src/a.txt conflicts with "
+        f"your files. Its changes are in its worktree, {WORKTREE}. See them with `troupe diff "
+        f"{SHORT}`, then `troupe approve {SHORT}` or `troupe reject {SHORT}`."
+    )
+
+
+def test_a_run_waiting_for_a_person_first_names_no_conflict_and_exits_4(core: StandIn) -> None:
+    waiting = {**PENDING, "state": "waiting", "cue": {"role": "director", "raisedAt": AT}}
+    gate = [{"step": "cue", "role": "director", "at": AT}]
+    core.reply("perform", _run(changes=waiting, gate=gate), _started())
+    ran = core.run("perform", "lead")
+    assert ran.code == ExitCode.WAITING
+    assert ran.err[-1].startswith(f"troupe: run {SHORT} waits at its gate for director. ")
+    assert "troupe accept" not in ran.err[-1]
+
+
+def test_a_rehearsal_shows_the_approvers_it_would_use(core: StandIn) -> None:
+    rehearsal = {
+        **REHEARSAL,
+        "approvers": {"value": ["troupe", "director"], "source": "default"},
+    }
+    core.reply("perform", PerformResult.from_data({"rehearsal": rehearsal}))
+    ran = core.run("perform", "lead", "--rehearse")
+    assert "  approvers: troupe, director (default)" in ran.out

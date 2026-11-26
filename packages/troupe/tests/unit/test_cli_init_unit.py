@@ -57,8 +57,8 @@ ALLOW_NOTE = (
 )
 PERFORM_LINE = f"3. troupe perform lead --direction '{DIRECTION}'"
 WORKTREE_NOTE = (
-    "   # The run works in its own worktree: see what it did with troupe diff, and keep it with "
-    "troupe accept."
+    "   # The run works in its own worktree, and waits at its gate for you: see what it did with "
+    "troupe diff, then keep it with troupe approve, or throw it away with troupe reject."
 )
 
 

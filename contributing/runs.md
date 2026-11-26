@@ -36,13 +36,16 @@ A run is its own stream, keyed by its run id. Its events, in order:
 
 | Event | When | Actor and via |
 |---|---|---|
-| `Run.Started` | Before the run's workspace is made and its runner starts, once every check that can refuse it has passed, and after its direction is stored. It holds the actor's name, the runner asked for, the stage's admission, the effect check, the direction's reference, the config version (the config stream's heads, sorted), the workspace: the worktree's path, base commit and whether the theatre was dirty, or `theatre`, and the run's `onContextFull` with where it came from (`actor`, `policy` or `default`) | You, through `cli` |
+| `Run.Started` | Before the run's workspace is made and its runner starts, once every check that can refuse it has passed, and after its direction is stored. It holds the actor's name, the runner asked for, the stage's admission, the effect check, the direction's reference, the config version (the config stream's heads, sorted), the workspace: the worktree's path, base commit and whether the theatre was dirty, or `theatre`, the run's `onContextFull` with where it came from (`actor`, `policy` or `default`), and, for a worktree run, its approvers with where they came from (`actor` or `default`) | You, through `cli` |
 | `Run.WorktreeMade` | For a worktree run, once its worktree is made and filled, before the runner starts. It holds the clone mechanisms | You, through `cli` |
 | `Run.Reported` | Once per run event, in `seq` order. It holds the event's `seq` and the event as received. The first is `init`, and a run's reported runner is read from it | The agent (`source: troupe`), through `runner` |
 | `Run.Noticed` | Once per notice troupe raises for the run, in the order it was raised among the run's events, before the end. It holds the notice, its credential masked. One raised before the start (planning the worktree) is recorded straight after it. It has no `seq` | You, through `cli` |
 | `Run.Ended` | Once, when the run host returns. It holds the outcome, its error, the result, the exit code, the transcript's and standard error's references, the transcript's format (`native`, or `kinds` when its records carry a kind), the limits and, whenever the runner started, what the audit of its changes found; if recording failed part-way, where and why; and for a worktree run, the changes captured: the diff's reference and counts, or why capturing failed, and what changed in the repository's shared state | The agent, through `runner` |
-| `Run.ChangesAccepted` | When a person accepts a worktree run's changes, after the diff applied. It holds the diff's reference and the files it changed | You, through `cli`, with no `stage` |
-| `Run.ChangesDiscarded` | When a person discards a worktree run's changes, after its worktree was removed | You, through `cli`, with no `stage` |
+| `Run.GatePassed` | At a succeeded worktree run's gate, when troupe can't keep its changes because they don't apply cleanly to the working tree. It holds the approver that passed (`troupe`), the one the gate goes to, the reason (`conflict`) and the files. At most one, before any cue | troupe (`system`, `core@<host>`), through `cli` |
+| `Run.CueRaised` | At a succeeded worktree run's gate, when it reaches a role a person holds (`director`). It holds the role and a brief: the actor, the outcome, the diff's reference and counts, and the pass that brought it, if any. When the role is first in the list, it's recorded in the same batch as `Run.Ended` | troupe (`system`), through `cli` |
+| `Run.ChangesAccepted` | When a worktree run's changes are kept, after the diff applied: by a person's accept (no approvals), by troupe at the gate, or by a person's approve. It holds the diff's reference and the files it changed. At a gate, its lineage carries one approval, in role `troupe` or `director` | You, or troupe at the gate, through `cli`, with no `stage` |
+| `Run.ChangesDiscarded` | When a person discards a worktree run's changes, after its worktree was removed. Refused while a cue is open | You, through `cli`, with no `stage` |
+| `Run.ChangesRejected` | When a person rejects a run's open cue, after its worktree was removed. It holds the role the cue was for | You, through `cli`, with no `stage` |
 
 All of a run's events share one change id. `seq` is the runner's numbering, kept in the payload; it isn't the
 stream's version, which counts `Run.Started` too. Recording a `seq` that isn't the next one is refused
@@ -227,7 +230,10 @@ errors and notices (`run.silent`, `run.retrying`, `run.estimate-dropped`) in
 | `run.changes-uncaptured` | A worktree run's changes weren't captured (it was interrupted, or capturing failed), so they can't be accepted; it names the worktree |
 | `run.changes-conflict` | A run's diff doesn't apply cleanly to the theatre's working tree, so nothing was changed; it names the files, the diff and the worktree |
 | `run.not-a-worktree` | A run that worked in the theatre has no changes to show, accept or discard |
-| `run.changes-settled` | A run's changes were already accepted or discarded: settling them is final |
+| `run.changes-settled` | A run's changes were already accepted, discarded or rejected: settling them is final |
+| `run.waiting-at-gate` | A run's changes wait at its gate for a role's answer, so accept and discard are refused; it names the role and the `troupe approve` or `troupe reject` command |
+| `gate.no-cue` | `troupe approve` or `troupe reject` was given a run with no open cue; it names the state its changes are in, and for pending ones `troupe accept` and `troupe discard` |
+| `gate.not-a-holder` | An agent identity tried to answer a cue for `director`, which only a person holds until roles config |
 | `workspace.no-head` | A worktree run needs a commit to start from, and the theatre has none yet |
 | `workspace.diff-too-large` | A run's changes make a diff larger than `GIT_DIFF_MAX_BYTES`, so they weren't captured |
 | `workspace.waiting` | (notice) Making, filling, capturing or removing a run's worktree has taken longer than `WORKSPACE_ANNOUNCE_AFTER_SECONDS`; at most once per operation |

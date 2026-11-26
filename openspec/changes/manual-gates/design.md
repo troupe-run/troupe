@@ -56,8 +56,10 @@ The pieces a gate builds on are already in place:
   component (the core, which the CLI runs in process until the house) and its instance (the host name, read through
   the platform seam).
 - A system actor has no `source`, because no identity source resolved it, and lineage refuses one that has.
-- `via` is `cli`, the surface the command came through. The cause is an event cause naming the run's `Run.Ended`,
-  with the end's change id: the gate is a reaction to the end.
+- `via` is `cli`, the surface the command came through. troupe's steps at the end of a run are recorded as part of
+  the `perform` command: they share its change id, and its command is their cause. They aren't recorded as reactions
+  to `Run.Ended`, because a reaction's cause must already be in the store, and a cue first in the list is recorded
+  in the same batch as the end (D3).
 - The identity port is untouched. A system actor is never resolved from a source; the core builds it, like the agent
   actor `perform` builds today (`source="troupe"`).
 - The client protocol's `ActorData` gains `system`, so status and logs can show who approved. `core/identity.py`'s
@@ -119,8 +121,9 @@ approval, is refused while a cue is open, with `run.waiting-at-gate`. That backs
   - `gate`, the ordered steps. A step is `{step: "passed" | "cue" | "approved" | "rejected", role, at, ...}`, and an
     answer names its actor and reason.
 - **The status result** gains `cues`: every open cue in the theatre, whatever the limit, newest first.
-- **The logs result** gains gate entries after the run's events and notices. Following stops at the end as today, so
-  `logs --follow` doesn't wait for a person.
+- **The logs result** carries the run's summary, so its `gate` steps come with the log, and `troupe logs` shows them
+  after the run's outcome. Following stops at the end as today, so `logs --follow` doesn't wait for a person.
+- **An accepted run's changes** name the files keeping them changed (`files`), so `perform` can say what troupe kept.
 - **New methods** `approve` and `reject`. Their requests mirror accept's and discard's (`run`, `reason`,
   `rehearse`), and so do their results: the files kept, or the worktree removed.
 

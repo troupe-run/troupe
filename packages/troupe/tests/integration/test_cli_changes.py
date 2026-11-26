@@ -4,6 +4,7 @@ run-workspaces; worktree-stage design D6).
 Its tests that stay in their own process are in unit/test_cli_changes_unit.py."""
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -30,13 +31,21 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
     return made
 
 
+FAIL = {"event": {"type": "result", "status": "error", "reason": "other", "message": "no"}}
+RUN_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+
+
 def performed(repo: Repo) -> tuple[str, str]:
-    """Perform a worktree actor that changes src/a.txt; its run id and perform's standard error."""
-    configure(repo, script(INIT, WRITE, OK), workspace="worktree", effects={"write": ["**"]})
+    """Perform a worktree actor that changes src/a.txt and then fails, so its changes reach no
+    gate and are pending for accept or discard (spec: gates, "A worktree run that succeeds with
+    changes passes a gate"); its run id and perform's standard error."""
+    configure(repo, script(INIT, WRITE, FAIL), workspace="worktree", effects={"write": ["**"]})
     repo.commit_all("config")
-    code, out, err = cli("perform", "tester")
-    assert code == 0, err
-    return out.split()[1], err
+    code, _, err = cli("perform", "tester")
+    assert code == ExitCode.FAILURE, err
+    found = RUN_ID.search(err)
+    assert found is not None, err
+    return found.group(0), err
 
 
 def test_perform_names_the_worktree_and_says_how_to_settle_the_changes(repo: Repo) -> None:
@@ -148,9 +157,11 @@ def test_rehearsing_a_worktree_perform_shows_the_base_and_makes_no_worktree(repo
 # Integration: perform, look, accept; perform again, discard (worktree-stage task 8.1)
 
 
-def test_a_worktree_run_is_seen_accepted_and_a_second_discarded_leaving_the_theatre_as_accepted(
+def test_a_clean_run_is_kept_by_troupe_and_a_waiting_one_rejected_leaving_the_first_kept(
     repo: Repo,
 ) -> None:
+    # Spec: gates, "troupe approves clean changes by itself", "Rejecting a cue removes the
+    # worktree"; end to end through the CLI.
     configure(
         repo,
         script(INIT, WRITE, {"writeFile": {"path": "new.txt", "content": "new\n"}}, OK),
@@ -158,31 +169,32 @@ def test_a_worktree_run_is_seen_accepted_and_a_second_discarded_leaving_the_thea
         effects={"write": ["**"]},
     )
     repo.commit_all("config")
-    code, out, _ = cli("perform", "tester")
-    assert code == ExitCode.OK
+    code, out, err = cli("perform", "tester")
+    assert code == ExitCode.OK, err
     first = out.split()[1]
-    code, out, _ = cli("status", first[:8])
-    assert "  changes: pending (1 added, 1 modified, 0 deleted)" in out
-    code, out, _ = cli("diff", first[:8])
-    assert "+two" in out
-    assert "+new" in out
-    assert cli("accept", first[:8])[0] == ExitCode.OK
     assert (repo.path / "src" / "a.txt").read_text(encoding="utf-8") == "two\n"
     assert (repo.path / "new.txt").read_text(encoding="utf-8") == "new\n"
+    code, out, _ = cli("status", first[:8])
+    assert "  changes: accepted (1 added, 1 modified, 0 deleted)" in out
+    repo.commit_all("the first run's work")
 
     configure(
         repo,
         script(INIT, {"writeFile": {"path": "src/a.txt", "content": "three\n"}}, OK),
         workspace="worktree",
         effects={"write": ["**"]},
+        approvers=["director"],
         name="second.json",
     )
-    code, out, _ = cli("perform", "tester")
-    assert code == ExitCode.OK
+    repo.commit_all("wait for a person")
+    code, out, err = cli("perform", "tester")
+    assert code == ExitCode.WAITING, err
     second = out.split()[1]
-    assert cli("discard", second[:8])[0] == ExitCode.OK
+    assert (repo.path / "src" / "a.txt").read_text(encoding="utf-8") == "two\n"
+    assert cli("reject", second[:8], "--reason", "not yet")[0] == ExitCode.OK
     assert (repo.path / "src" / "a.txt").read_text(encoding="utf-8") == "two\n"
     assert not (repo.path / ".troupe" / "local" / "worktrees" / first).exists()
     assert not (repo.path / ".troupe" / "local" / "worktrees" / second).exists()
-    code, out, _ = cli("status")
+    code, out, _ = cli("status", second[:8])
     assert code == ExitCode.OK
+    assert "  changes: rejected" in out

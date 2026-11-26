@@ -21,11 +21,13 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from troupe.core import gates
 from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Send
 from troupe.core.client.session import Session
 from troupe.core.errors import TroupeError
-from troupe.core.events import EventStore
+from troupe.core.events import Approval, Command, EventStore
+from troupe.core.events.lineage import timestamp
 from troupe.core.files import directory_lock
 from troupe.core.notices import Notice
 from troupe.core.runs.aggregate import Run
@@ -33,6 +35,8 @@ from troupe.core.runs.backends import Backends, lease_dir
 from troupe.core.runs.projections import RunView
 from troupe.core.runs.queries import read_runs, resolve, run_state
 from troupe.core.workspaces import remove_worktree, worktree_path
+
+SETTLED = ("accepted", "discarded", "rejected")
 
 
 def _view(store: EventStore, ref: str) -> RunView:
@@ -80,8 +84,10 @@ def _acceptable(view: RunView, theatre: Path) -> dict[str, Any]:
     state = run_state(view, theatre)
     if state != "ended":
         raise _not_ended(view, state)
-    if changes["state"] in ("accepted", "discarded"):
+    if changes["state"] in SETTLED:
         raise _settled(view, changes)
+    if changes["state"] == "waiting":
+        raise gates.waiting_at_gate(view.run_id, changes["cue"]["role"], discarding=False)
     if changes["state"] == "none":
         raise TroupeError(
             "run.no-changes",
@@ -142,13 +148,96 @@ def _settle_lock(theatre: Path, run_id: str) -> Path:
 
 
 def _record(
-    store: EventStore, run_id: str, reason: str | None, settle: Callable[[Run], None]
+    store: EventStore,
+    run_id: str,
+    reason: str | None,
+    settle: Callable[[Run], None],
+    *,
+    command: Command | None = None,
+    approved_as: str | None = None,
 ) -> None:
+    """Record what ``settle`` does to the run, as ``command`` (a person's command, through
+    cli, by default). With ``approved_as``, the event carries one approval in that role, by the
+    command's own actor (spec: lineage, "Approvals come only from a gate")."""
     run = store.load(UUID(run_id))
     if not isinstance(run, Run):
         raise TypeError(f"run {run_id}'s stream doesn't hold a run")
     settle(run)
-    store.command(via="cli", actor=store.identify(), reason=reason).record(run.collect_events())
+    command = command or store.command(via="cli", actor=store.identify(), reason=reason)
+    approvals = (
+        [Approval(actor=command.actor, role=approved_as, at=timestamp(store.clock()))]
+        if approved_as is not None
+        else []
+    )
+    command.record(run.collect_events(), approvals=approvals)
+
+
+def conflict(view: RunView, changes: dict[str, Any], failing: list[str]) -> TroupeError:
+    return TroupeError(
+        "run.changes-conflict",
+        problem=f"Run {view.run_id}'s diff doesn't apply cleanly to your working "
+        f"tree: {', '.join(failing)} changed since the run started. Nothing was changed.",
+        fix=f"See the diff with troupe diff {view.run_id[:8]}, and the run's files in "
+        f"{changes['worktree']}. To merge by hand: troupe diff {view.run_id[:8]} | "
+        "git apply --3way",
+        path=changes["worktree"],
+        details={
+            "run": view.run_id,
+            "diff": changes["diff"],
+            "files": list(failing),
+            "worktree": changes["worktree"],
+        },
+    )
+
+
+def keep(
+    store: EventStore,
+    theatre: Path,
+    view: RunView,
+    changes: dict[str, Any],
+    data: bytes,
+    *,
+    rehearse: bool,
+    reason: str | None,
+    announce: Callable[[Notice], None],
+    command: Command | None = None,
+    approved_as: str | None = None,
+) -> m.AcceptResult:
+    """Apply the run's diff (``data``) to the working tree, all or nothing, record it, then
+    remove the worktree. Refused with run.changes-conflict, changing nothing, when it doesn't
+    apply. The caller holds the run's settle lock. accept, approve and troupe's own step at a
+    gate keep a run's work this one way (manual-gates design D3)."""
+    vcs = store.vcs
+    patch = worktree_path(theatre, view.run_id).with_name(f"{view.run_id}.accept.diff")
+    patch.write_bytes(data)
+    try:
+        applicability = vcs.check_apply(patch)
+        if not applicability.applies:
+            raise conflict(view, changes, list(applicability.failing))
+        if rehearse:
+            return m.AcceptResult(
+                run=view.run_id, files=list(applicability.files), rehearsed=True, notices=[]
+            )
+        files = vcs.apply(patch)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            patch.unlink()
+    _record(
+        store,
+        view.run_id,
+        reason,
+        lambda run: run.accept_changes(changes["diff"], list(files), approved_as=approved_as),
+        command=command,
+        approved_as=approved_as,
+    )
+    notices: list[m.NoticeData] = []
+    try:
+        remove_worktree(vcs, theatre, view.run_id, announce)
+    except TroupeError:
+        notice = _not_removed(theatre, view.run_id, changes["worktree"])
+        announce(notice)
+        notices.append(m.NoticeData.of(notice))
+    return m.AcceptResult(run=view.run_id, files=list(files), rehearsed=False, notices=notices)
 
 
 def _accept(
@@ -163,53 +252,19 @@ def _accept(
     view = _view(store, request.run)
     changes = _acceptable(view, theatre)
     data = backends.artifact_store(session).read(changes["diff"])
-    vcs = store.vcs
     with directory_lock(_settle_lock(theatre, view.run_id)):
         view = _view(store, view.run_id)  # again, inside the lock: another accept may have won
         changes = _acceptable(view, theatre)
-        patch = worktree_path(theatre, view.run_id).with_name(f"{view.run_id}.accept.diff")
-        patch.write_bytes(data)
-        try:
-            applicability = vcs.check_apply(patch)
-            if not applicability.applies:
-                raise TroupeError(
-                    "run.changes-conflict",
-                    problem=f"Run {view.run_id}'s diff doesn't apply cleanly to your working "
-                    f"tree: {', '.join(applicability.failing)} changed since the run started. "
-                    "Nothing was changed.",
-                    fix=f"See the diff with troupe diff {view.run_id[:8]}, and the run's files in "
-                    f"{changes['worktree']}. To merge by hand: troupe diff {view.run_id[:8]} | "
-                    "git apply --3way",
-                    path=changes["worktree"],
-                    details={
-                        "run": view.run_id,
-                        "diff": changes["diff"],
-                        "files": list(applicability.failing),
-                        "worktree": changes["worktree"],
-                    },
-                )
-            if request.rehearse:
-                return m.AcceptResult(
-                    run=view.run_id, files=list(applicability.files), rehearsed=True, notices=[]
-                )
-            files = vcs.apply(patch)
-        finally:
-            with contextlib.suppress(FileNotFoundError):
-                patch.unlink()
-        _record(
+        return keep(
             store,
-            view.run_id,
-            request.reason,
-            lambda run: run.accept_changes(changes["diff"], list(files)),
+            theatre,
+            view,
+            changes,
+            data,
+            rehearse=bool(request.rehearse),
+            reason=request.reason,
+            announce=announce,
         )
-    notices: list[m.NoticeData] = []
-    try:
-        remove_worktree(vcs, theatre, view.run_id, announce)
-    except TroupeError:
-        notice = _not_removed(theatre, view.run_id, changes["worktree"])
-        announce(notice)
-        notices.append(m.NoticeData.of(notice))
-    return m.AcceptResult(run=view.run_id, files=list(files), rehearsed=False, notices=notices)
 
 
 def _not_removed(theatre: Path, run_id: str, worktree: str) -> Notice:
@@ -239,8 +294,10 @@ def _discard(
         state = run_state(view, theatre)
         if state in ("running", "unfinished-elsewhere"):
             raise _not_ended(view, state)
-        if changes["state"] in ("accepted", "discarded"):
+        if changes["state"] in SETTLED:
             raise _settled(view, changes)
+        if changes["state"] == "waiting":
+            raise gates.waiting_at_gate(view.run_id, changes["cue"]["role"], discarding=True)
         return changes
 
     changes = check(view)

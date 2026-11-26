@@ -27,7 +27,10 @@ from troupe.core.client import messages as m
 from troupe.core.runs.aggregate import (
     CHANGES_ACCEPTED,
     CHANGES_DISCARDED,
+    CHANGES_REJECTED,
+    CUE_RAISED,
     ENDED,
+    GATE_PASSED,
     NOTICED,
     REPORTED,
     STARTED,
@@ -82,6 +85,12 @@ class RunView:
     settled_at: str | None = None
     notices: list[m.RunNotice] = field(default_factory=list)
     log: list[m.LogEntry] = field(default_factory=list)
+    gate: list[dict[str, Any]] = field(default_factory=list)
+    """The gate's steps, in recorded order, as gateStep data (manual-gates design D6)."""
+    cue: dict[str, Any] | None = None
+    """The cue raised at the gate: its role and when."""
+    kept_files: list[str] | None = None
+    """The files an acceptance changed."""
 
     def apply(self, recording: Recording, *, keep_log: bool) -> None:
         state = _state(recording)
@@ -110,9 +119,53 @@ class RunView:
         elif recording.topic == ENDED:
             self.ended = state
             self.ended_at = _at(recording)
-        elif recording.topic in (CHANGES_ACCEPTED, CHANGES_DISCARDED):
-            self.settled = "accepted" if recording.topic == CHANGES_ACCEPTED else "discarded"
+        elif recording.topic == GATE_PASSED:
+            self.gate.append(
+                {
+                    "step": "passed",
+                    "approver": state["approver"],
+                    "to": state["to"],
+                    "files": state["files"],
+                    "at": _at(recording),
+                }
+            )
+        elif recording.topic == CUE_RAISED:
+            self.cue = {"role": state["role"], "raisedAt": _at(recording)}
+            self.gate.append({"step": "cue", "role": state["role"], "at": _at(recording)})
+        elif recording.topic in (CHANGES_ACCEPTED, CHANGES_DISCARDED, CHANGES_REJECTED):
+            self.settled = {
+                CHANGES_ACCEPTED: "accepted",
+                CHANGES_DISCARDED: "discarded",
+                CHANGES_REJECTED: "rejected",
+            }[recording.topic]
             self.settled_at = _at(recording)
+            self.kept_files = state.get("files")
+            self._answered(recording, state)
+
+    def _answered(self, recording: Recording, state: dict[str, Any]) -> None:
+        """The gate's answer, when the settling event is one: an acceptance whose lineage carries
+        an approval, or a rejection."""
+        lineage = recording.lineage or {}
+        if recording.topic == CHANGES_ACCEPTED:
+            approvals = lineage.get("approvals") or []
+            if not approvals:
+                return
+            role, step = approvals[0]["role"], "approved"
+        elif recording.topic == CHANGES_REJECTED:
+            role, step = state["role"], "rejected"
+        else:
+            return
+        self.gate.append(
+            _present(
+                {
+                    "step": step,
+                    "role": role,
+                    "actor": lineage.get("actor"),
+                    "reason": lineage.get("reason"),
+                    "at": _at(recording),
+                }
+            )
+        )
 
     @property
     def workspace(self) -> dict[str, Any]:
@@ -145,9 +198,14 @@ class RunView:
         if self.settled is not None:
             data["state"] = self.settled
             data["settledAt"] = self.settled_at
+            if self.kept_files:
+                data["files"] = self.kept_files
             return data
         data["worktree"] = workspace["path"]
-        if self.captured is None or "error" in captured:
+        if self.cue is not None:
+            data["state"] = "waiting"
+            data["cue"] = self.cue
+        elif self.captured is None or "error" in captured:
             data["state"] = "uncaptured"
         else:
             data["state"] = "pending" if "diff" in captured else "none"
@@ -191,8 +249,21 @@ class RunView:
             "changes": self.changes(),
             "usage": self.usage,
             "cost": self.cost,
+            "approvers": started.get("approvers"),
+            "gate": list(self.gate) or None,
         }
         return m.RunSummary.from_data(_present(summary))
+
+    def open_cue(self) -> m.OpenCue | None:
+        """The run's open cue, as status lists it; None when nothing waits at its gate."""
+        if self.cue is None or self.settled is not None or self.started is None:
+            return None
+        return m.OpenCue(
+            run=self.run_id,
+            actor=self.started["actor"],
+            role=self.cue["role"],
+            raised_at=self.cue["raisedAt"],
+        )
 
 
 def _usage_and_cost(
