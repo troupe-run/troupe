@@ -67,6 +67,9 @@ A segment's first line is its header; every later line is one event. Lines are s
   | `troupe.core.runs.aggregate:Run.Ended` | [`events/run-ended.schema.json`](../protocol/schemas/events/run-ended.schema.json) |
   | `troupe.core.runs.aggregate:Run.ChangesAccepted` | [`events/run-changes-accepted.schema.json`](../protocol/schemas/events/run-changes-accepted.schema.json) |
   | `troupe.core.runs.aggregate:Run.ChangesDiscarded` | [`events/run-changes-discarded.schema.json`](../protocol/schemas/events/run-changes-discarded.schema.json) |
+  | `troupe.core.runs.aggregate:Run.GatePassed` | [`events/run-gate-passed.schema.json`](../protocol/schemas/events/run-gate-passed.schema.json) |
+  | `troupe.core.runs.aggregate:Run.CueRaised` | [`events/run-cue-raised.schema.json`](../protocol/schemas/events/run-cue-raised.schema.json) |
+  | `troupe.core.runs.aggregate:Run.ChangesRejected` | [`events/run-changes-rejected.schema.json`](../protocol/schemas/events/run-changes-rejected.schema.json) |
   | `troupe.core.config.aggregate:Config.Changed` | [`events/config-changed.schema.json`](../protocol/schemas/events/config-changed.schema.json) |
   | `troupe.core.config.aggregate:Config.Settled` | [`events/config-settled.schema.json`](../protocol/schemas/events/config-settled.schema.json) |
 - **Batches are all or nothing.** A batch is written with one fsynced append, and each line names its batch. A

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/reject-request.schema.json",
+  "title": "reject: request",
+  "description": "Answer a run's open cue by rejecting its changes: remove its worktree, change nothing in the working tree, and record the rejection in the cue's role. A request never names a path or a role.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run"
+  ],
+  "properties": {
+    "run": {
+      "description": "The run, by id or unique prefix.",
+      "$ref": "run.schema.json#/$defs/runRef"
+    },
+    "reason": {
+      "description": "Why, in the person's words, recorded in lineage. Absent: none was given.",
+      "type": "string",
+      "minLength": 1
+    },
+    "rehearse": {
+      "description": "Change nothing: make every check a reject makes, and report the worktree it would remove. Absent means false.",
+      "type": "boolean"
+    }
+  }
+}

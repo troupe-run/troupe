@@ -59,8 +59,13 @@ A run is recorded as its own stream of [events](../prompt-book/events.md), all s
   the transcript's lines are written, and the limits the run ran under. For a run in its own worktree, it also holds
   the changes: a reference to the diff, with how many files it adds, modifies and deletes, and any branches, tags,
   config or hooks that changed in git while it ran.
-- **`Run.ChangesAccepted`:** you accepted the run's changes, and its diff was applied to your files.
+- **`Run.GatePassed`:** at the run's gate, troupe couldn't keep its changes, because they conflict with your files,
+  so it passed the gate to `director`.
+- **`Run.CueRaised`:** the gate reached `director`, and the run waits for you to approve or reject it.
+- **`Run.ChangesAccepted`:** the run's changes were kept, and its diff was applied to your files: by troupe at the
+  gate, by your approval, or by your accept.
 - **`Run.ChangesDiscarded`:** you discarded the run's changes, and its worktree was removed.
+- **`Run.ChangesRejected`:** you rejected the run's changes at its gate, and its worktree was removed.
 
 If an event or a notice can't be recorded, troupe stops the run, so the record never has a gap, and still records
 the end if it can, saying where recording stopped and why. The transcript is always kept.
@@ -229,18 +234,23 @@ where your file system can (APFS on macOS, Btrfs or XFS on Linux, a Dev Drive on
 almost no extra disk space. It still takes about as long to make as a checkout, because git reads every file to
 check it matches the commit. Changes you haven't committed aren't in it: troupe tells you when there are some.
 
-When the run ends, troupe captures what it changed as a diff, keeps it, and leaves the worktree in place:
+When the run ends, troupe captures what it changed as a diff and keeps it. A run that succeeded then passes its
+[gate](gates-and-decisions.md): its actor's approvers decide whether its work is kept.
 
-- `troupe diff <run>` shows the diff;
-- `troupe accept <run>` applies it to your files, unstaged and all or nothing, then removes the worktree. If you've
-  changed the same lines since, nothing changes, and troupe names the files;
-- `troupe discard <run>` removes the worktree, and your files stay as they were.
+- **By default, clean work is kept.** troupe applies the diff to your files, unstaged and all or nothing, removes the
+  worktree, and records that it approved it. If you've changed the same lines since, it changes nothing and passes
+  the gate to you.
+- **When the gate reaches you** (`director`), the run waits, with its worktree in place: `troupe diff <run>` shows
+  the diff, `troupe approve <run>` keeps it as above, and `troupe reject <run>` removes the worktree, leaving your
+  files as they were. An actor whose approvers are `["director"]` always waits for you.
+- **A run that didn't succeed** reaches no gate: its changes wait, and `troupe accept <run>` keeps them or
+  `troupe discard <run>` removes the worktree.
 
-Accepting leaves the changes uncommitted, like any edit of your own. The next run starts from your latest commit,
-so it won't see them: commit after accepting when the next run should build on this one.
+Keeping work leaves the changes uncommitted, like any edit of your own. The next run starts from your latest commit,
+so it won't see them: commit after keeping a run's work when the next run should build on it.
 
-Accepting or discarding is recorded with who did it and why, and it's final. Changes the run made under `.troupe/`
-are never part of the diff, so a run can't write your history or config through an accept.
+Keeping, rejecting or discarding is recorded with who did it and why, and it's final. Changes the run made under
+`.troupe/` are never part of the diff, so a run can't write your history or config through its gate.
 
 **A worktree catches mistakes, not intent.** It contains nothing: the actor can still write outside it or reach the
 network, which is why [policy](#policy) still has to allow the local stage. And every worktree shares your

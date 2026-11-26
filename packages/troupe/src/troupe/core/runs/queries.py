@@ -193,15 +193,22 @@ def _status(request: m.StatusRequest, session: Session, backends: Backends) -> m
     store = backends.event_store(session)
     runs = read_runs(store)
     notices: list[Notice] = []
+    cues: list[m.OpenCue] = []
     if request.run is not None:
         chosen = [runs[resolve(request.run, runs)]]
     else:
         limit = request.limit or defaults.STATUS_RUNS_LIMIT
         chosen = list(reversed(runs.values()))[:limit]
+        # Every open cue, whatever the limit, newest first (spec: runs, "Status lists every open
+        # cue").
+        found = (view.open_cue() for view in runs.values())
+        cues = sorted((c for c in found if c is not None), key=lambda c: c.raised_at, reverse=True)
     names = _names(store)
     summaries = [_summary(view, session.theatre, notices, names) for view in chosen]
     return m.StatusResult(
-        runs=summaries, notices=[m.NoticeData.of(n) for n in [*store.notices(), *notices]]
+        runs=summaries,
+        cues=cues,
+        notices=[m.NoticeData.of(n) for n in [*store.notices(), *notices]],
     )
 
 

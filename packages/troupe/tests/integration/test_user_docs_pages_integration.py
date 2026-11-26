@@ -28,6 +28,7 @@ from troupe.core import interim
 from troupe.core.audition import (
     OLLAMA_AUDITION_MODEL,
 )
+from troupe.core.exit_codes import ExitCode
 from troupe.core.policy import ALLOW_UNENFORCED_LOCAL_STAGE, env_name
 from user_docs_pages_shared import (
     ANTHROPIC,
@@ -70,7 +71,8 @@ WALKTHROUGH = [
     "export TROUPE_POLICY_ALLOW_UNENFORCED_LOCAL_STAGE=true",
     f'troupe perform lead --direction "{DIRECTION}"',
     "troupe diff <run>",
-    "troupe accept <run>",
+    "troupe approve <run>",
+    "troupe config unset actors.lead.approvers",
     "troupe status",
     "troupe logs <run>",
 ]
@@ -220,7 +222,10 @@ def test_the_claude_code_walkthrough_runs_as_written_with_a_stand_in_claude(
     assert lines == WALKTHROUGH
     stand_in_claude(tmp_path, monkeypatch, write="NOTES.md=my-app is an app.")
     code, out, err = perform_walkthrough(monkeypatch, lines)
-    assert code == 0, err
+    # The audition's actor waits at its gate for director (spec: user-docs, "The first run leads
+    # with Claude Code and your own direction").
+    assert code == ExitCode.WAITING, err
+    assert "waits at its gate for director" in err
     run_id = out.split()[1]
     assert out == f"run {run_id} succeeded\n"
     code, out, _ = cli("config", "get", "actors.lead.character")
@@ -233,14 +238,26 @@ def test_the_claude_code_walkthrough_runs_as_written_with_a_stand_in_claude(
     code, _, err = run_line(lines[7].replace("<run>", run_id[:8]), monkeypatch)
     assert code == 0, err
     assert (project.path / "NOTES.md").read_bytes() == b"my-app is an app."
-    code, out, _ = run_line(lines[8], monkeypatch)
+
+    # Dropping the wait (spec: user-docs, "The first run answers its gate and says how to drop
+    # the wait"): the next run, whose changes apply cleanly, is kept without asking.
+    code, _, err = run_line(lines[8], monkeypatch)
+    assert code == 0, err
+    stand_in_claude(tmp_path / "again", monkeypatch, write="LATER.md=later")
+    code, out, err = run_line(lines[5], monkeypatch)
+    assert code == 0, err
+    second = out.split()[1]
+    assert f"run {second[:8]}'s changes were kept, approved by troupe" in err
+    assert (project.path / "LATER.md").read_bytes() == b"later"
+
+    code, out, _ = run_line(lines[9], monkeypatch)
     assert code == 0
     assert run_id[:8] in out
-    code, out, _ = run_line(lines[9].replace("<run>", run_id[:8]), monkeypatch)
+    code, out, _ = run_line(lines[10].replace("<run>", run_id[:8]), monkeypatch)
     assert code == 0
-    assert out.endswith(
-        f"run {run_id}: succeeded\n  audit: every change the run made was declared\n"
-    ), out
+    assert f"run {run_id}: succeeded\n  audit: every change the run made was declared\n" in out
+    assert "  approvers: director (actor)\n" in out
+    assert re.search(r"  gate: approved by ada@example.com as director at \S+\n$", out), out
 
 
 def test_the_walkthroughs_commit_and_allow_lines_are_the_ones_init_prints(
@@ -277,7 +294,7 @@ def test_the_uncommitted_changes_notice_the_page_shows_is_the_one_perform_writes
     (project.path / "README.md").write_text("# my-app, changed\n", encoding="utf-8")
     (project.path / "TODO.md").write_text("- more\n", encoding="utf-8")
     code, _, err = perform_walkthrough(monkeypatch, sh_lines(walkthrough()))
-    assert code == 0, err
+    assert code == ExitCode.WAITING, err
     assert "troupe: 2 path(s) differ from HEAD" in err
     assert re.search(pattern, err), err
 
@@ -328,7 +345,8 @@ def test_the_offline_walkthrough_runs_as_written_with_no_claude(
         code, _, err = run_line(line, monkeypatch)
         assert code == 0, (line, err)
     code, out, err = run_line(lines[-1], monkeypatch)
-    assert code == 0, err
+    # The scripted audition writes its file, which waits at its gate for director.
+    assert code == ExitCode.WAITING, err
     assert out == f"run {out.split()[1]} succeeded\n"
 
 

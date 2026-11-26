@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
+from troupe.core.errors import TroupeError
 from troupe.core.events.lineage import System
 from troupe.platform.processes import host_name
 
@@ -96,3 +97,45 @@ def approvers_problems(approvers: Sequence[str], *, workspace: str | None) -> li
 def troupe_actor() -> System:
     """troupe acting by itself: the core, on this host (#15; design D2)."""
     return System(id=f"core@{host_name()}")
+
+
+def waiting_at_gate(run_id: str, role: str, *, discarding: bool) -> TroupeError:
+    """accept or discard of a run whose cue is open (spec: run-workspaces, "Accept and discard
+    leave an open cue to its answer")."""
+    answer = "reject" if discarding else "approve"
+    command = f"troupe {answer} {run_id[:8]}"
+    return TroupeError(
+        "run.waiting-at-gate",
+        problem=f"Run {run_id} waits at its gate for {role}, so its changes are settled by "
+        f"{role}'s answer, not by {'discard' if discarding else 'accept'}.",
+        fix=f"Answer the gate: {command}",
+        details={"run": run_id, "role": role, "command": command},
+    )
+
+
+def no_cue(run_id: str, state: str) -> TroupeError:
+    """approve or reject of a run with no open cue (spec: gates, "A cue is answered once")."""
+    fix = (
+        f"Its changes are pending, with no gate: keep them with troupe accept {run_id[:8]}, or "
+        f"throw them away with troupe discard {run_id[:8]}."
+        if state == "pending"
+        else f"See what its changes are with troupe status {run_id[:8]}."
+    )
+    return TroupeError(
+        "gate.no-cue",
+        problem=f"Run {run_id} has no open cue to answer: its changes are {state}.",
+        fix=fix,
+        details={"run": run_id, "state": state},
+    )
+
+
+def not_a_holder(role: str, kind: str) -> TroupeError:
+    """An answer from an identity that doesn't hold ``role`` (spec: gates, "Whoever runs troupe
+    holds director")."""
+    return TroupeError(
+        "gate.not-a-holder",
+        problem=f"An {kind} can't answer for {role}: until roles config, only a person holds "
+        f"{role}.",
+        fix="Answer as a person: unset TROUPE_ACTOR, or set it to human:<id>.",
+        details={"role": role, "kind": kind},
+    )

@@ -19,8 +19,10 @@ from typing import Any, TextIO
 from troupe.cli.render import (
     actor_shown,
     render_audit,
+    render_cue,
     render_error,
     render_event,
+    render_gate,
     render_log_entry,
     render_notice,
     render_run,
@@ -98,6 +100,9 @@ def _render_rehearsal(rehearsal: dict[str, Any], stdout: TextIO) -> None:
     ]
     if "runtime" in rehearsal:
         lines += runtime_lines(rehearsal["runtime"], indent="  ")
+    if "approvers" in rehearsal:
+        approvers = rehearsal["approvers"]
+        lines.append(f"  approvers: {', '.join(approvers['value'])} ({approvers['source']})")
     lines.append("Rehearsal: nothing was started or recorded.")
     print("\n".join(lines), file=stdout)
 
@@ -118,12 +123,39 @@ def _planned(workspace: dict[str, Any]) -> str:
     return f"its own worktree, made at {workspace['base']}"
 
 
+def _gate_passed(run: dict[str, Any]) -> dict[str, Any] | None:
+    passed = [step for step in run.get("gate", []) if step["step"] == "passed"]
+    return passed[-1] if passed else None
+
+
 def _settle_hint(run: dict[str, Any]) -> str | None:
-    """What to do next with a worktree run's changes, or None for a run in the theatre."""
+    """What became of a worktree run's changes, and what to do next; None for a run in the
+    theatre (spec: cli, "Perform says where a worktree run works")."""
     changes = run.get("changes")
-    if changes is None or "worktree" not in changes:
+    if changes is None:
         return None
-    short, where = run["runId"][:8], changes["worktree"]
+    short = run["runId"][:8]
+    if changes["state"] == "accepted":
+        approved = [step for step in run.get("gate", []) if step["step"] == "approved"]
+        by = f", approved by {approved[-1]['role']}" if approved else ""
+        files = ", ".join(changes.get("files", []))
+        return f"troupe: run {short}'s changes were kept{by}, unstaged: {files}."
+    if "worktree" not in changes:
+        return None
+    where = changes["worktree"]
+    if changes["state"] == "waiting":
+        role = changes["cue"]["role"]
+        passed = _gate_passed(run)
+        because = (
+            f" because {', '.join(passed['files'])} conflicts with your files"
+            if passed is not None
+            else ""
+        )
+        return (
+            f"troupe: run {short} waits at its gate for {role}{because}. Its changes are in its "
+            f"worktree, {where}. See them with `troupe diff {short}`, then `troupe approve "
+            f"{short}` or `troupe reject {short}`."
+        )
     if changes["state"] == "pending":
         return (
             f"troupe: run {short}'s changes are in its worktree, {where}, not yet in your files. "
@@ -161,7 +193,7 @@ def run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -
             if "worktree" in update:
                 print(
                     f"troupe: run {run_id[:8]} works in its own worktree, {update['worktree']}; "
-                    "your files change only when you accept it.",
+                    "your files change only when its work is kept at its gate.",
                     file=stderr,
                     flush=True,
                 )
@@ -192,7 +224,8 @@ def run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -
         print(hint, file=stderr)
     if run["outcome"] == "succeeded":
         print(f"run {run['runId']} succeeded", file=stdout)
-        return ExitCode.OK
+        waiting = (run.get("changes") or {}).get("state") == "waiting"
+        return ExitCode.WAITING if waiting else ExitCode.OK
     if run["outcome"] == "cancelled":
         print(f"troupe: run {run['runId']} was cancelled.", file=stderr)
         return ExitCode.CANCELLED
@@ -226,6 +259,8 @@ def run_status(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) ->
     elif arguments.run is not None:
         print("\n".join(render_run(result["runs"][0])), file=stdout)
     elif result["runs"]:
+        for cue in result["cues"]:
+            print(render_cue(cue), file=stdout)
         print("\n".join(render_run_line(run) for run in result["runs"]), file=stdout)
     else:
         print("No runs yet.", file=stdout)
@@ -262,6 +297,8 @@ def run_logs(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> E
         if "actorNow" in run:
             print(f"  actor: {actor_shown(run)}", file=stdout)
         for line in render_audit(run):
+            print(line, file=stdout)
+        for line in render_gate(run):
             print(line, file=stdout)
     return ExitCode.CANCELLED if session.cancel.requested else ExitCode.OK
 
@@ -318,6 +355,32 @@ def run_accept(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) ->
         print(f"accepting run {result['run']} would change:\n{files}", file=stdout)
         return ExitCode.WOULD_CHANGE
     print(f"run {result['run']} accepted, unstaged:\n{files}", file=stdout)
+    return ExitCode.OK
+
+
+def run_approve(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    params = _settle_params(arguments)
+    result = _call("approve", params, _session(), _on_notice(stderr), _ignore_cancel)
+    files = "\n".join(f"  {name}" for name in result["files"])
+    if result["rehearsed"]:
+        print(f"approving run {result['run']} would change:\n{files}", file=stdout)
+        return ExitCode.WOULD_CHANGE
+    print(f"run {result['run']} approved, its changes kept, unstaged:\n{files}", file=stdout)
+    return ExitCode.OK
+
+
+def run_reject(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> ExitCode:
+    params = _settle_params(arguments)
+    result = _call("reject", params, _session(), _on_notice(stderr), _ignore_cancel)
+    if result["rehearsed"]:
+        print(f"rejecting run {result['run']} would remove {result['worktree']}", file=stdout)
+        return ExitCode.WOULD_CHANGE
+    print(f"run {result['run']} rejected: removed {result['worktree']}", file=stdout)
+    print(
+        "troupe: rejecting removes files, not git state: any branches, tags, stashes, config or "
+        "hooks the run made are still there (troupe status shows what it saw change).",
+        file=stderr,
+    )
     return ExitCode.OK
 
 

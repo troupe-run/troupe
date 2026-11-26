@@ -6,9 +6,9 @@ prerelease: true
 ---
 
 Every event troupe records carries its [lineage](../the-company/lineage.md): who, through what, when, why, and as
-part of what. This page shows how to answer questions about runs from it today. Answering "who decided this?" for a
-decision needs [gates](../the-company/gates-and-decisions.md) and [roles](../the-company/roles-and-actors.md), which
-aren't built yet.
+part of what. This page shows how to answer questions about runs from it today, including who let a run's work
+through its [gate](../the-company/gates-and-decisions.md). Saying which person held which role needs
+[roles](../the-company/roles-and-actors.md), which aren't built yet.
 
 ## Who ran this, and on what?
 
@@ -28,8 +28,15 @@ run whose `troupe perform` was killed before it recorded an end shows as `interr
 troupe logs <run>
 ```
 
-`troupe logs` shows each of a run's events in order, with when troupe recorded it, then the run's outcome and what
-its audit found. Add `--follow` to keep watching until the run ends.
+`troupe logs` shows each of a run's events in order, with when troupe recorded it, then the run's outcome, what
+its audit found, and what happened at its gate. Add `--follow` to keep watching until the run ends.
+
+## Who let its work through?
+
+`troupe status <run>` shows a worktree run's approvers, with where they came from, and each step at its gate: a pass
+when troupe couldn't keep the changes, the cue that asked you, and the answer, with who gave it, in which role, and
+why. troupe's own approval shows as `core@<host>`, troupe acting by itself. In the event files, the event that kept
+the work carries the approval in its lineage's `approvals`.
 
 ## The whole record
 
@@ -58,5 +65,5 @@ tools work on it too: `git log .troupe/events/` shows when each part of the hist
 - **Which person, in which role.** Lineage records the raw identity today, such as an email address. Mapping it to
   a person, and recording the role they acted in, waits on roles
   ([#61](https://github.com/troupe-run/troupe/issues/61), [#44](https://github.com/troupe-run/troupe/issues/44)).
-- **Who approved it.** `approvals` fills in once gates exist
-  ([#62](https://github.com/troupe-run/troupe/issues/62)).
+- **Approvals from other roles.** Every approval is in role `troupe` or `director` until roles config lets a gate
+  name others ([#148](https://github.com/troupe-run/troupe/issues/148)).

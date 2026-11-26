@@ -2320,12 +2320,119 @@
             "settled": {
               "enum": [
                 "accepted",
-                "discarded"
+                "discarded",
+                "rejected"
               ]
             },
             "at": {
               "description": "When they were settled. Absent: not known where the refusal was made.",
               "$ref": "lineage.schema.json#/$defs/timestamp"
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.waiting-at-gate"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run",
+            "role",
+            "command"
+          ],
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1
+            },
+            "role": {
+              "description": "The role the cue is for.",
+              "enum": [
+                "troupe",
+                "director"
+              ]
+            },
+            "command": {
+              "description": "The command that answers the cue, troupe approve or troupe reject with the run.",
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "gate.no-cue"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "run",
+            "state"
+          ],
+          "properties": {
+            "run": {
+              "type": "string",
+              "minLength": 1
+            },
+            "state": {
+              "description": "The state the run's changes are in.",
+              "enum": [
+                "pending",
+                "waiting",
+                "accepted",
+                "discarded",
+                "rejected",
+                "none",
+                "uncaptured"
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "gate.not-a-holder"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "role",
+            "kind"
+          ],
+          "properties": {
+            "role": {
+              "description": "The role that was answered for.",
+              "enum": [
+                "troupe",
+                "director"
+              ]
+            },
+            "kind": {
+              "description": "The kind of identity that answered.",
+              "enum": [
+                "agent"
+              ]
             }
           }
         }

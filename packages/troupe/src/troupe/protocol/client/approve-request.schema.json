@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/client/approve-request.schema.json",
+  "title": "approve: request",
+  "description": "Answer a run's open cue by approving its changes: apply its captured diff to the theatre's working tree, unstaged, all or nothing, record the approval in the cue's role, then remove its worktree. A request never names a path, a diff or a role.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run"
+  ],
+  "properties": {
+    "run": {
+      "description": "The run, by id or unique prefix.",
+      "$ref": "run.schema.json#/$defs/runRef"
+    },
+    "reason": {
+      "description": "Why, in the person's words, recorded in lineage. Absent: none was given.",
+      "type": "string",
+      "minLength": 1
+    },
+    "rehearse": {
+      "description": "Change nothing: check that the cue is open, the person may answer it, and the diff applies cleanly, and report the files it would change. Absent means false.",
+      "type": "boolean"
+    }
+  }
+}

@@ -244,3 +244,19 @@ def test_the_runtimes_page_gives_the_shortest_key_as_the_code_does() -> None:
     assert f"a key under {defaults.CREDENTIAL_MIN_BYTES} bytes is refused" in (
         DOCS / RUNTIMES_PAGE
     ).read_text(encoding="utf-8")
+
+
+# Requirement: The first run answers its gate and says how to drop the wait (spec: user-docs)
+
+
+def test_the_first_runs_keep_section_approves_names_reject_and_gives_no_accept() -> None:
+    text = section(PAGE, "Keep it, or not")
+    assert sh_lines(text) == ["troupe diff <run>", "troupe approve <run>"]
+    assert "`troupe reject <run>`" in text
+    assert "troupe accept" not in text
+
+
+def test_the_first_run_says_clean_work_is_kept_without_asking_and_how_to_drop_the_wait() -> None:
+    text = section(PAGE, "Keep clean work without asking")
+    assert sh_lines(text) == ["troupe config unset actors.lead.approvers"]
+    assert "troupe approves them itself" in text

@@ -112,6 +112,10 @@ CODES: dict[str, ExitCode] = {
     "run.changes-conflict": ExitCode.FAILURE,
     "run.changes-settled": ExitCode.FAILURE,
     "run.not-a-worktree": ExitCode.FAILURE,
+    # A run's gate (manual-gates design D7). contributing/runs.md lists them.
+    "run.waiting-at-gate": ExitCode.FAILURE,
+    "gate.no-cue": ExitCode.FAILURE,
+    "gate.not-a-holder": ExitCode.FAILURE,
     # A request that isn't understood is a usage error from any surface (design D15).
     "client.invalid-request": ExitCode.USAGE,
     "client.unknown-method": ExitCode.USAGE,

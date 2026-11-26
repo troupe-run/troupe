@@ -165,6 +165,9 @@
             "troupe.core.runs.aggregate:Run.Ended",
             "troupe.core.runs.aggregate:Run.ChangesAccepted",
             "troupe.core.runs.aggregate:Run.ChangesDiscarded",
+            "troupe.core.runs.aggregate:Run.GatePassed",
+            "troupe.core.runs.aggregate:Run.CueRaised",
+            "troupe.core.runs.aggregate:Run.ChangesRejected",
             "troupe.core.config.aggregate:Config.Changed",
             "troupe.core.config.aggregate:Config.Settled"
           ]
@@ -287,6 +290,54 @@
           "if": {
             "properties": {
               "topic": {
+                "const": "troupe.core.runs.aggregate:Run.GatePassed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/run-gate-passed.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
+                "const": "troupe.core.runs.aggregate:Run.CueRaised"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/run-cue-raised.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
+                "const": "troupe.core.runs.aggregate:Run.ChangesRejected"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/run-changes-rejected.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
                 "const": "troupe.core.config.aggregate:Config.Changed"
               }
             }
@@ -342,6 +393,9 @@
               "troupe.core.runs.aggregate:Run.Ended",
               "troupe.core.runs.aggregate:Run.ChangesAccepted",
               "troupe.core.runs.aggregate:Run.ChangesDiscarded",
+              "troupe.core.runs.aggregate:Run.GatePassed",
+              "troupe.core.runs.aggregate:Run.CueRaised",
+              "troupe.core.runs.aggregate:Run.ChangesRejected",
               "troupe.core.config.aggregate:Config.Changed",
               "troupe.core.config.aggregate:Config.Settled"
             ]

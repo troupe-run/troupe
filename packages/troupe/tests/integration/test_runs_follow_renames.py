@@ -36,8 +36,9 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
 
 
 def _performed() -> str:
+    # The audition's actor waits at its gate for director (manual-gates decision 8).
     code, out, err = cli("perform", "lead", "--direction", "Write the file.")
-    assert code == ExitCode.OK, err
+    assert code == ExitCode.WAITING, err
     return out.split()[1]
 
 

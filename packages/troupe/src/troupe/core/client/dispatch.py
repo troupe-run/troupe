@@ -63,6 +63,8 @@ FAMILIES: Mapping[str, Callable[[], Mapping[str, Method]]] = {
     "diff": _runs,
     "accept": _runs,
     "discard": _runs,
+    "approve": _runs,
+    "reject": _runs,
     "config-set": _config,
     "config-get": _config,
     "sync": _config,

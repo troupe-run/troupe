@@ -5,8 +5,9 @@ status: written
 prerelease: true
 ---
 
-This page will show how to make sure each decision reaches the person who owns it. The pieces it needs, roles and
-gates, aren't built yet. This is what's decided about routing.
+This page will show how to make sure each decision reaches the person who owns it. Gates are built, and each sends
+its cue to `director`, which whoever runs troupe holds. Roles, which route a decision to the person who owns it,
+aren't built yet. This is what's decided about routing.
 
 ## Decisions go to a role
 
@@ -23,9 +24,9 @@ gates, aren't built yet. This is what's decided about routing.
 
 - How you say who holds a role in config ([#61](https://github.com/troupe-run/troupe/issues/61)), and how a person's
   ids map to them ([#44](https://github.com/troupe-run/troupe/issues/44)).
-- How a gate is defined ([#62](https://github.com/troupe-run/troupe/issues/62)).
-- How gates and escalations reach whoever holds their role. The first ones go to whoever runs troupe
-  ([#148](https://github.com/troupe-run/troupe/issues/148)).
+- How gates and escalations reach whoever holds their role. Today every cue goes to `director`, held by whoever runs
+  troupe ([#148](https://github.com/troupe-run/troupe/issues/148)). An actor's gate is set by its `approvers`: see
+  [Gates and decisions](../the-company/gates-and-decisions.md).
 - How a request reaches someone working on another computer, and how their answer comes back
   ([#12](https://github.com/troupe-run/troupe/issues/12)).
 - Which channels notify each role. The leaning is a notification port with channels per role, but it isn't decided

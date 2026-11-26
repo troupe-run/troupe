@@ -27,6 +27,8 @@ MESSAGES = {
         "diff": ("request", "result"),
         "accept": ("request", "result"),
         "discard": ("request", "result"),
+        "approve": ("request", "result"),
+        "reject": ("request", "result"),
         "init": ("request", "result"),
     }.items()
 }

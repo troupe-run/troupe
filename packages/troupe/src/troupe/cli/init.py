@@ -165,8 +165,8 @@ def _step_notes(step: dict[str, Any], entries: list[dict[str, Any]]) -> list[str
             f"this theatre elsewhere installs it with the command at {INSTALL_PAGE}."
         )
     notes.append(
-        "The run works in its own worktree: see what it did with troupe diff, and keep it with "
-        "troupe accept."
+        "The run works in its own worktree, and waits at its gate for you: see what it did with "
+        "troupe diff, then keep it with troupe approve, or throw it away with troupe reject."
     )
     return notes
 

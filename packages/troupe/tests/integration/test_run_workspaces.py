@@ -419,9 +419,11 @@ def test_an_expected_file_in_the_worktree_passes_the_effect_check(repo: Repo) ->
         write("out/hello.txt", "hello\n"),
         OK,
         effect={"kind": "files", "paths": ["out/hello.txt"]},
+        approvers=["director"],
     )
     run = made.perform(asked).run
     assert run.outcome == "succeeded"
+    # It waits at its gate for director, so the theatre doesn't have it yet.
     assert not (repo.path / "out" / "hello.txt").exists()
 
 

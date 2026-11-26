@@ -110,6 +110,11 @@ def started(store: EventStore, workspace: dict[str, Any]) -> Run:
         config=["sha256:" + "b" * 64],
         workspace=workspace,
         on_context_full={"value": "fail", "source": "default"},
+        approvers=(
+            {"value": ["troupe", "director"], "source": "default"}
+            if workspace.get("kind") == "worktree"
+            else None
+        ),
     )
     store.command(via="cli").record(run.collect_events())
     return run

@@ -161,15 +161,16 @@ ACCEPTED = [
     ("status-request.schema.json", {"limit": 5}, "list with a limit"),
     ("status-request.schema.json", {"run": "0f8fad5b"}, "an 8-digit prefix"),
     ("status-request.schema.json", {"run": RUN_ID}, "a full id"),
-    ("status-result.schema.json", {"runs": [SUMMARY], "notices": []}, "a list"),
+    ("status-result.schema.json", {"cues": [], "runs": [SUMMARY], "notices": []}, "a list"),
     (
         "status-result.schema.json",
-        {"runs": [changed(SUMMARY, transcriptFormat="kinds")], "notices": []},
+        {"cues": [], "runs": [changed(SUMMARY, transcriptFormat="kinds")], "notices": []},
         "a run whose transcript has kinds",
     ),
     (
         "status-result.schema.json",
         {
+            "cues": [],
             "runs": [
                 changed(
                     SUMMARY,
@@ -204,12 +205,13 @@ ACCEPTED = [
     # Requirement: A run summary carries its run's recorded notices
     (
         "status-result.schema.json",
-        {"runs": [changed(SUMMARY, notices=[RUN_NOTICE])], "notices": []},
+        {"cues": [], "runs": [changed(SUMMARY, notices=[RUN_NOTICE])], "notices": []},
         "a run that fell silent",
     ),
     (
         "status-result.schema.json",
         {
+            "cues": [],
             "runs": [
                 changed(
                     SUMMARY,
@@ -258,12 +260,12 @@ ACCEPTED = [
     ),
     (
         "status-result.schema.json",
-        {"runs": [changed(SUMMARY, audit={"outside": [OUTSIDE]})], "notices": []},
+        {"cues": [], "runs": [changed(SUMMARY, audit={"outside": [OUTSIDE]})], "notices": []},
         "a failed run's audit naming a change outside the declaration",
     ),
     (
         "status-result.schema.json",
-        {"runs": [changed(SUMMARY, audit={"outside": []})], "notices": []},
+        {"cues": [], "runs": [changed(SUMMARY, audit={"outside": []})], "notices": []},
         "an audit that found every change declared",
     ),
 ]
@@ -343,6 +345,7 @@ REFUSED = [
     (
         "status-result.schema.json",
         {
+            "cues": [],
             "runs": [
                 changed(
                     SUMMARY,
@@ -361,27 +364,27 @@ REFUSED = [
     ),
     (
         "status-result.schema.json",
-        {"runs": [changed(SUMMARY, drop_endedAt=None)], "notices": []},
+        {"cues": [], "runs": [changed(SUMMARY, drop_endedAt=None)], "notices": []},
         "an ended run without endedAt",
     ),
     (
         "status-result.schema.json",
-        {"runs": [changed(SUMMARY, drop_outcome=None)], "notices": []},
+        {"cues": [], "runs": [changed(SUMMARY, drop_outcome=None)], "notices": []},
         "an ended run without an outcome",
     ),
     (
         "status-result.schema.json",
-        {"runs": [changed(SUMMARY, drop_transcriptFormat=None)], "notices": []},
+        {"cues": [], "runs": [changed(SUMMARY, drop_transcriptFormat=None)], "notices": []},
         "a transcript without its format",
     ),
     (
         "status-result.schema.json",
-        {"runs": [changed(SUMMARY, drop_transcript=None)], "notices": []},
+        {"cues": [], "runs": [changed(SUMMARY, drop_transcript=None)], "notices": []},
         "a transcript format without a transcript",
     ),
     (
         "status-result.schema.json",
-        {"runs": [changed(SUMMARY, transcriptFormat="framed")], "notices": []},
+        {"cues": [], "runs": [changed(SUMMARY, transcriptFormat="framed")], "notices": []},
         "a transcript format the schema doesn't define",
     ),
     *[
@@ -432,12 +435,12 @@ REFUSED = [
     ),
     (
         "status-result.schema.json",
-        {"runs": [changed(SUMMARY, notices=[])], "notices": []},
+        {"cues": [], "runs": [changed(SUMMARY, notices=[])], "notices": []},
         "a summary with an empty notices list",
     ),
     (
         "status-result.schema.json",
-        {"runs": [changed(SUMMARY, notices=[NOTICE["notice"]])], "notices": []},
+        {"cues": [], "runs": [changed(SUMMARY, notices=[NOTICE["notice"]])], "notices": []},
         "a recorded notice without its time",
     ),
     (
@@ -458,6 +461,7 @@ REFUSED = [
     (
         "status-result.schema.json",
         {
+            "cues": [],
             "runs": [
                 changed(
                     SUMMARY,
@@ -474,6 +478,7 @@ REFUSED = [
     (
         "status-result.schema.json",
         {
+            "cues": [],
             "runs": [
                 changed(
                     SUMMARY,

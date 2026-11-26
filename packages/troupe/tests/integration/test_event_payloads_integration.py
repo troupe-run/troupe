@@ -365,6 +365,7 @@ def test_a_worktree_made_with_a_field_its_topic_does_not_define_fails_naming_the
         config=[HASH],
         workspace={**WORKTREE, "dirty": False},
         on_context_full={"value": "fail", "source": "default"},
+        approvers={"value": ["troupe", "director"], "source": "default"},
     )
     run.made_worktree(["teleport"])
     with pytest.raises(ProtocolGuardError, match=r"Run\.WorktreeMade.*'teleport'"):

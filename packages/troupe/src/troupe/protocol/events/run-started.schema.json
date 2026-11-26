@@ -85,11 +85,18 @@
         }
       }
     },
+    "approvers": {
+      "description": "A worktree run's approvers, as troupe resolved them when the run started: the order its gate tries them in, and where they came from. Present exactly when the run works in a worktree.",
+      "$ref": "../client/run.schema.json#/$defs/approvers"
+    },
     "runtime": {
       "description": "The runtime the run talked to, as troupe resolved it when the run started, each value with its source: the model is always resolved, and a credential is named by its variable, never its value. Absent: the actor named no runtime.",
       "$ref": "../runtime.schema.json#/$defs/resolved"
     }
   },
+  "if": {"properties": {"workspace": {"$ref": "#/$defs/worktreeWorkspace"}}},
+  "then": {"required": ["approvers"]},
+  "else": {"properties": {"approvers": false}},
   "$defs": {
     "commit": {
       "title": "Commit",

@@ -188,7 +188,70 @@ class SharedData(Message):
             raise fail(where, "names at least one of refs, config and hooks")
 
 
-ChangesState = Literal["pending", "accepted", "discarded", "none", "uncaptured"]
+ChangesState = Literal[
+    "waiting", "pending", "accepted", "discarded", "rejected", "none", "uncaptured"
+]
+GateRole = Literal["troupe", "director"]
+
+
+@dataclass(frozen=True)
+class CueData(Message):
+    """The open cue a run's changes wait for (spec: gates, "Reaching director raises a cue")."""
+
+    role: GateRole = json_field("role")
+    raised_at: str = json_field("raisedAt", pattern=TIME)
+
+
+class GateStep(Message):
+    """One thing that happened at a run's gate, told apart by ``step``."""
+
+    TYPE_FIELD: ClassVar[str] = "step"
+
+
+@dataclass(frozen=True)
+class PassedStep(GateStep):
+    TYPE: ClassVar[str | None] = "passed"
+    approver: GateRole = json_field("approver")
+    to: GateRole = json_field("to")
+    files: list[str] = json_field("files", min_items=1)
+    at: str = json_field("at", pattern=TIME)
+
+
+@dataclass(frozen=True)
+class CueStep(GateStep):
+    TYPE: ClassVar[str | None] = "cue"
+    role: GateRole = json_field("role")
+    at: str = json_field("at", pattern=TIME)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ApprovedStep(GateStep):
+    TYPE: ClassVar[str | None] = "approved"
+    role: GateRole = json_field("role")
+    actor: ActorData = json_field("actor")
+    reason: str | None = json_field("reason", default=None, min_length=1)
+    at: str = json_field("at", pattern=TIME)
+
+
+@dataclass(frozen=True, kw_only=True)
+class RejectedStep(GateStep):
+    TYPE: ClassVar[str | None] = "rejected"
+    role: GateRole = json_field("role")
+    actor: ActorData = json_field("actor")
+    reason: str | None = json_field("reason", default=None, min_length=1)
+    at: str = json_field("at", pattern=TIME)
+
+
+GateStepData = PassedStep | CueStep | ApprovedStep | RejectedStep
+
+
+@dataclass(frozen=True)
+class ApproversData(Message):
+    """A worktree run's approvers, in order, and where they came from (spec: runs, "A worktree
+    run's start records its approvers and where they came from")."""
+
+    value: list[GateRole] = json_field("value", min_items=1)
+    source: Literal["actor", "default"] = json_field("source")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -205,15 +268,22 @@ class ChangesData(Message):
     error: p.ErrorData | None = json_field("error", default=None)
     settled_at: str | None = json_field("settledAt", default=None, pattern=TIME)
     worktree: str | None = json_field("worktree", default=None, pattern=THEATRE_PATH)
+    cue: CueData | None = json_field("cue", default=None)
+    files: list[str] | None = json_field("files", default=None, min_items=1)
+    """The files keeping them changed; None unless accepted."""
 
     def _check(self, where: str) -> None:
-        if self.state == "pending" and (self.diff is None or self.worktree is None):
-            raise fail(where, "pending changes have a diff and a worktree")
+        if self.state in ("pending", "waiting") and (self.diff is None or self.worktree is None):
+            raise fail(where, f"{self.state} changes have a diff and a worktree")
+        if (self.state == "waiting") != (self.cue is not None):
+            raise fail(where, "cue is present exactly when state is waiting")
         if self.state in ("none", "uncaptured") and (self.diff is not None or not self.worktree):
             raise fail(where, f"{self.state} changes have a worktree and no diff")
-        settled = self.state in ("accepted", "discarded")
+        if self.files is not None and self.state != "accepted":
+            raise fail(where, "files are present only when the changes were accepted")
+        settled = self.state in ("accepted", "discarded", "rejected")
         if settled != (self.settled_at is not None):
-            raise fail(where, "settledAt is present exactly when state is accepted or discarded")
+            raise fail(where, "settledAt is present exactly when the changes are settled")
         if settled and self.worktree is not None:
             raise fail(where, "settled changes have no worktree")
 
@@ -315,6 +385,8 @@ class RunSummary(Message):
     changes: ChangesData | None = json_field("changes", default=None)
     usage: p.Usage | None = json_field("usage", default=None)
     cost: CostData | None = json_field("cost", default=None)
+    approvers: ApproversData | None = json_field("approvers", default=None)
+    gate: list[GateStepData] | None = json_field("gate", default=None, min_items=1)
     actor_now: str | None = json_field("actorNow", default=None, pattern=ACTOR_NAME)
     """The actor's name now, when it was renamed since the run (config-mv design D4)."""
 
@@ -343,8 +415,13 @@ class RunSummary(Message):
                 "audit is present exactly when an ended run's runner started, that is when it "
                 "has a transcript",
             )
-        if isinstance(self.workspace, WorktreeWorkspace) != (self.changes is not None):
+        worktree = isinstance(self.workspace, WorktreeWorkspace)
+        if worktree != (self.changes is not None):
             raise fail(where, "changes are present exactly when the workspace is a worktree")
+        if worktree != (self.approvers is not None):
+            raise fail(where, "approvers are present exactly when the workspace is a worktree")
+        if not worktree and self.gate is not None:
+            raise fail(where, "a run in the theatre has no gate")
 
 
 HostEvent = (
@@ -519,6 +596,8 @@ class Rehearsal(Message):
     direction: TextSummary | None = json_field("direction", default=None)
     workspace: RehearsedWorkspace = json_field("workspace")
     runtime: ResolvedRuntime | None = json_field("runtime", default=None)
+    approvers: ApproversData | None = json_field("approvers", default=None)
+    """None for a run in the theatre, which has no gate."""
 
 
 @dataclass(frozen=True)
@@ -546,8 +625,19 @@ class StatusRequest(Message):
 
 
 @dataclass(frozen=True)
+class OpenCue(Message):
+    """A run whose changes wait at its gate, as status lists it."""
+
+    run: str = json_field("run", pattern=p.RUN_ID_PATTERN)
+    actor: str = json_field("actor", pattern=ACTOR_NAME)
+    role: GateRole = json_field("role")
+    raised_at: str = json_field("raisedAt", pattern=TIME)
+
+
+@dataclass(frozen=True)
 class StatusResult(Message):
     runs: list[RunSummary] = json_field("runs")
+    cues: list[OpenCue] = json_field("cues")
     notices: list[NoticeData] = json_field("notices")
 
 
@@ -811,6 +901,24 @@ class DiffResult(Message):
 
 @dataclass(frozen=True)
 class AcceptRequest(Message):
+    run: str = json_field("run", pattern=RUN_REF)
+    reason: str | None = json_field("reason", default=None, min_length=1)
+    rehearse: bool | None = json_field("rehearse", default=None)
+
+
+@dataclass(frozen=True)
+class ApproveRequest(Message):
+    """Answer a run's open cue by keeping its changes (spec: gates)."""
+
+    run: str = json_field("run", pattern=RUN_REF)
+    reason: str | None = json_field("reason", default=None, min_length=1)
+    rehearse: bool | None = json_field("rehearse", default=None)
+
+
+@dataclass(frozen=True)
+class RejectRequest(Message):
+    """Answer a run's open cue by removing its worktree (spec: gates)."""
+
     run: str = json_field("run", pattern=RUN_REF)
     reason: str | None = json_field("reason", default=None, min_length=1)
     rehearse: bool | None = json_field("rehearse", default=None)

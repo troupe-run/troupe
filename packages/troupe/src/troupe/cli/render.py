@@ -211,8 +211,44 @@ def render_run(run: Mapping[str, Any]) -> list[str]:
         lines.append(f"  recording stopped at {at}: {failed['error']['code']}")
     if "changes" in run:
         lines.extend(_changes(run["changes"]))
+    lines.extend(render_gate(run))
     lines.extend(_notices(run))
     return lines
+
+
+def render_gate(run: Mapping[str, Any]) -> list[str]:
+    """A worktree run's approvers, with where they came from, and each step at its gate, for its
+    summary and its logs (spec: runs, "A run's summary shows its gate"; cli, "Status shows open
+    cues and a run's gate")."""
+    approvers = run.get("approvers")
+    if approvers is None:
+        return []
+    lines = [f"  approvers: {', '.join(approvers['value'])} ({approvers['source']})"]
+    for step in run.get("gate", []):
+        lines.append(f"  gate: {_gate_step(step)}")
+    return lines
+
+
+def _gate_step(step: Mapping[str, Any]) -> str:
+    if step["step"] == "passed":
+        return (
+            f"{step['approver']} passed to {step['to']} at {step['at']}: "
+            f"{', '.join(step['files'])} conflicts with your files"
+        )
+    if step["step"] == "cue":
+        return f"cue for {step['role']} at {step['at']}"
+    actor = step["actor"]
+    who = actor.get("id", actor["kind"])
+    reason = f": {step['reason']}" if "reason" in step else ""
+    return f"{step['step']} by {who} as {step['role']} at {step['at']}{reason}"
+
+
+def render_cue(cue: Mapping[str, Any]) -> str:
+    """One line for an open cue in status's list."""
+    return (
+        f"waiting: run {cue['run'][:8]} of {cue['actor']} for {cue['role']}, since "
+        f"{cue['raisedAt']}: troupe approve {cue['run'][:8]} or troupe reject {cue['run'][:8]}"
+    )
 
 
 def render_audit(run: Mapping[str, Any]) -> list[str]:
@@ -252,6 +288,8 @@ def _changes(changes: Mapping[str, Any]) -> list[str]:
     """A worktree run's changes, for its summary."""
     state = changes["state"]
     line = f"  changes: {state}"
+    if "cue" in changes:
+        line = f"  changes: waiting for {changes['cue']['role']}"
     if "added" in changes:
         line += (
             f" ({changes['added']} added, {changes['modified']} modified, "
@@ -277,6 +315,9 @@ def _changes(changes: Mapping[str, Any]) -> list[str]:
 def render_run_line(run: Mapping[str, Any]) -> str:
     """One line for a run in a list."""
     status = run["outcome"] if run["state"] == "ended" else run["state"]
+    cue = (run.get("changes") or {}).get("cue")
+    if cue is not None:
+        status = f"{status}, waiting"
     count = len(run.get("notices", []))
     noticed = f", {count} {'notice' if count == 1 else 'notices'}" if count else ""
     cost = run.get("cost")

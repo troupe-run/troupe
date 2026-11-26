@@ -62,6 +62,27 @@ The payload of a run's discard (topic troupe.core.runs.aggregate:Run.ChangesDisc
 | `lineage` | object (Lineage) | Yes | Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 
+### Run.ChangesRejected
+
+The payload of a rejection at a worktree run's gate (topic troupe.core.runs.aggregate:Run.ChangesRejected): the role the open cue was for removed the run's worktree, and nothing reached the theatre. The reason is in the lineage. Final: nothing else settles the run's changes after it.
+
+| Field | Holds | Always there | What it is |
+|---|---|---|---|
+| `lineage` | object (Lineage) | Yes | Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id. |
+| `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
+| `role` | one of `"troupe"`, `"director"` | Yes | The role that rejected, which the cue was for. |
+
+### Run.CueRaised
+
+The payload of a cue at a worktree run's gate (topic troupe.core.runs.aggregate:Run.CueRaised): an open request to a role a person holds, to approve or reject the run's changes, with a brief that makes sense without the run's other events. At most one. The run's changes wait until the role answers.
+
+| Field | Holds | Always there | What it is |
+|---|---|---|---|
+| `lineage` | object (Lineage) | Yes | Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id. |
+| `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
+| `role` | one of `"troupe"`, `"director"` | Yes | The role the cue is for. |
+| `brief` | object (Brief) | Yes | What the role needs to answer: whose run it was, how it ended, what it changed and where the diff is, and why the cue came to this role. |
+
 ### Run.Ended
 
 The payload of a run's last event (topic troupe.core.runs.aggregate:Run.Ended): the outcome the run host derived, with what the audit of the run's changes found, and whether recording failed part-way.
@@ -73,6 +94,19 @@ The payload of a run's last event (topic troupe.core.runs.aggregate:Run.Ended): 
 | `outcome` | object | Yes | How the run ended, as the run host derived it from what the runner reported, never from its exit code alone: the outcome, whether the runner exited, was killed or never started, the limits it ran under, and what the audit of its changes found. |
 | `recording` | object (A run event wasn't recorded) or object (A notice wasn't recorded) | No | What wasn't recorded first, and why: the first run event, by its seq, or a notice troupe raised for the run, by its code. Absent: recording didn't fail. |
 | `changes` | object | No | What a worktree run changed, captured when it ended. Present exactly when the run's workspace was a worktree. |
+
+### Run.GatePassed
+
+The payload of a pass at a worktree run's gate (topic troupe.core.runs.aggregate:Run.GatePassed): an approver couldn't act, so the gate went to the next approver in the run's list. Only troupe passes, when the run's diff doesn't apply cleanly to the working tree; nothing was applied. At most one, after the run's end and before any cue.
+
+| Field | Holds | Always there | What it is |
+|---|---|---|---|
+| `lineage` | object (Lineage) | Yes | Where an event came from: who made it, through what, when, why, as part of which command and in reaction to what, with whose approval, and in what version-control state. Every event troupe records carries it. It is left out of the event's content hash, so two clones that make the same change agree on the event's id. |
+| `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
+| `approver` | one of `"troupe"`, `"director"` | Yes | The approver that passed. |
+| `to` | one of `"troupe"`, `"director"` | Yes | The approver the gate went to next. |
+| `reason` | one of `"conflict"` | Yes | Why it couldn't act: conflict, the diff doesn't apply cleanly to the working tree. A closed set. |
+| `files` | list of string | Yes | The files whose part of the diff doesn't apply to the working tree, relative to the theatre. |
 
 ### Run.Noticed
 
@@ -113,6 +147,7 @@ The payload of a run's first event (topic troupe.core.runs.aggregate:Run.Started
 | `config` | list of string | Yes | The config version the run used: the ids of the config stream's heads, sorted. Working out config at that version gives the actor's runner, options, effect check and character. |
 | `workspace` | object (In the theatre) or object (In its own worktree) | Yes | Where the run works. |
 | `on_context_full` | object | Yes | What the run does when its engine's context fills, as troupe resolved it when the run started, and where that came from: actor when the actor's onContextFull set it, policy when the compaction policy (all or none) decided it, default otherwise. |
+| `approvers` | object (Approvers) | No | A worktree run's approvers, as troupe resolved them when the run started: the order its gate tries them in, and where they came from. Present exactly when the run works in a worktree. |
 | `runtime` | object (Resolved runtime) | No | The runtime the run talked to, as troupe resolved it when the run started, each value with its source: the model is always resolved, and a credential is named by its variable, never its value. Absent: the actor named no runtime. |
 
 ### Run.WorktreeMade

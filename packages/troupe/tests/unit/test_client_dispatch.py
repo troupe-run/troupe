@@ -26,7 +26,7 @@ class Spy:
     async def __call__(self, request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401
         self.calls.append(request)
         send(m.Started(run_id=RUN_ID))
-        return m.StatusResult(runs=[], notices=[])
+        return m.StatusResult(runs=[], cues=[], notices=[])
 
 
 def run(method: str, params: object, spy: Spy, updates: list[dict[str, Any]] | None = None) -> Any:  # noqa: ANN401
@@ -69,7 +69,7 @@ def test_a_valid_request_reaches_its_handler_parsed_and_updates_and_result_retur
     result = run("status", {"limit": 3}, spy, updates)
     assert spy.calls == [m.StatusRequest(limit=3)]
     assert updates == [{"kind": "started", "runId": RUN_ID}]
-    assert result == {"runs": [], "notices": []}
+    assert result == {"runs": [], "cues": [], "notices": []}
 
 
 def test_the_core_offers_exactly_its_methods_with_their_request_types() -> None:
@@ -85,6 +85,8 @@ def test_the_core_offers_exactly_its_methods_with_their_request_types() -> None:
         "diff": m.DiffRequest,
         "accept": m.AcceptRequest,
         "discard": m.DiscardRequest,
+        "approve": m.ApproveRequest,
+        "reject": m.RejectRequest,
         "init": m.InitRequest,
     }
 
