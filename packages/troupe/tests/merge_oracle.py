@@ -1,6 +1,8 @@
 """The config merge before renames (config-mv design D2, D9): an oracle for the property test that
 a history with no rename merges exactly as it did. A copy of core/config/merge.py at de8769b5
-(#503 fixed, no entities), kept as it is; never change it to follow merge.py.
+(#503 fixed, no entities), kept as it is; never change it to follow merge.py. One departure:
+``_check_parents`` names the event and its line in its details (#506), so the oracle can't build an
+error the protocol refuses.
 
 Original docstring follows.
 
