@@ -391,6 +391,7 @@ def test_ctrl_c_during_init_asks_the_core_to_cancel_and_prints_nothing_more(
 ) -> None:
     core.reply("init", _bare(), presses=1)
     ran = core.run("init")
+    assert ran.logged == ()  # no error from the Ctrl-C handler
     assert core.calls[0].session.cancel.requested
     assert ran.code == ExitCode.OK
     assert ran.stderr == ""
