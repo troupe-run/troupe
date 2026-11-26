@@ -42,8 +42,8 @@ allowed, though Claude Code still runs commands it classes as read-only (init-an
 
 CLAUDE_CODE_EFFECTS = {"write": ["**"]}
 """What the Claude Code example may change: any file in its worktree, which reaches the theatre only
-through troupe accept, after troupe diff shows it. It can't delete or move a file, so a direction
-that does fails the run's audit (declared-effects design D10)."""
+through troupe approve at its gate, after troupe diff shows it. It can't delete or move a file, so
+a direction that does fails the run's audit (declared-effects design D10)."""
 
 CHARACTER = (
     "You are a careful developer working in this repository. Read what's there before you change "

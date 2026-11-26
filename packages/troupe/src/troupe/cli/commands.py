@@ -1,5 +1,5 @@
-"""perform, status, logs, diff, accept and discard on the command line (spec: cli;
-perform-status-logs design D14; config-model design D14; worktree-stage design D6).
+"""perform, status, logs, diff, accept, discard, approve and reject on the command line (spec: cli,
+gates; perform-status-logs design D14; config-model design D14; worktree-stage design D6).
 
 Each command builds its request as data and calls the core through the client protocol's
 dispatcher, in process, then renders the updates and the result. Nothing here decides anything
