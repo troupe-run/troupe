@@ -37,7 +37,9 @@ class Recording(Harness):
 
 
 def configured(made: Harness, *steps: dict[str, Any], **fields: Any) -> dict[str, Any]:  # noqa: ANN401
-    """Configure the actor and commit it, so the theatre's HEAD holds its config."""
+    """Configure the actor and commit it, so the theatre's HEAD holds its config. Unless
+    ``fields`` declares effects, the actor is read-only: a run that writes a file fails its audit
+    and ends failed, so its changes reach no gate and stay pending (manual-gates)."""
     asked = worktree_request(*steps, **fields)
     made.configure(asked)
     made.repo.commit_all("config")
