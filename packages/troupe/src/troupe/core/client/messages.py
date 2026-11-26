@@ -247,7 +247,7 @@ GateStepData = PassedStep | CueStep | ApprovedStep | RejectedStep
 
 @dataclass(frozen=True)
 class ApproversData(Message):
-    """A worktree run's approvers, in order, and where they came from (spec: runs, "A worktree
+    """A worktree run's approvers, in order, and where they came from (spec: gates, "A worktree
     run's start records its approvers and where they came from")."""
 
     value: list[GateRole] = json_field("value", min_items=1)

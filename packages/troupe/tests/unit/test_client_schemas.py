@@ -104,7 +104,55 @@ MARKED: dict[str, Any] = {
 }
 """A file sync rewrote from a conflicted merge and marked resolved (mark-config-resolved D6)."""
 
+WORKTREE_SUMMARY: dict[str, Any] = changed(
+    SUMMARY,
+    workspace={
+        "kind": "worktree",
+        "path": ".troupe/local/worktrees/x",
+        "base": "c" * 40,
+        "dirty": False,
+    },
+    changes={"state": "pending", "diff": HASH, "worktree": ".troupe/local/worktrees/x"},
+    approvers={"value": ["troupe", "director"], "source": "default"},
+)
+WAITING: dict[str, Any] = {
+    "state": "waiting",
+    "diff": HASH,
+    "worktree": ".troupe/local/worktrees/x",
+    "cue": {"role": "director", "raisedAt": AT},
+}
+APPROVED_STEP: dict[str, Any] = {
+    "step": "approved",
+    "role": "director",
+    "actor": {"kind": "human", "id": "ada@example.com", "source": "vcs"},
+    "at": AT,
+}
+
+
 ACCEPTED = [
+    ("perform-result.schema.json", {"run": WORKTREE_SUMMARY}, "a worktree run with its approvers"),
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                WORKTREE_SUMMARY,
+                changes=WAITING,
+                gate=[{"step": "cue", "role": "director", "at": AT}],
+            )
+        },
+        "a run waiting at its gate, with its cue",
+    ),
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                WORKTREE_SUMMARY,
+                changes={"state": "rejected", "settledAt": AT},
+                gate=[{**APPROVED_STEP, "step": "rejected", "reason": "no"}],
+            )
+        },
+        "a run rejected at its gate",
+    ),
     ("perform-request.schema.json", PERFORM, "everything"),
     ("perform-request.schema.json", {"actor": "t"}, "only what's required"),
     (
@@ -283,6 +331,75 @@ def files(*paths: str) -> dict[str, Any]:
 
 
 REFUSED = [
+    # A run's gate (spec: gates; manual-gates design D6)
+    (
+        "perform-result.schema.json",
+        {"run": changed(WORKTREE_SUMMARY, drop_approvers=None)},
+        "a worktree run without approvers",
+    ),
+    (
+        "perform-result.schema.json",
+        {"run": changed(SUMMARY, approvers={"value": ["director"], "source": "actor"})},
+        "a run in the theatre with approvers",
+    ),
+    (
+        "perform-result.schema.json",
+        {"run": changed(SUMMARY, gate=[APPROVED_STEP])},
+        "a run in the theatre with a gate",
+    ),
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                WORKTREE_SUMMARY, changes={k: v for k, v in WAITING.items() if k != "cue"}
+            )
+        },
+        "waiting changes without their cue",
+    ),
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                WORKTREE_SUMMARY,
+                changes={**WORKTREE_SUMMARY["changes"], "cue": WAITING["cue"]},
+            )
+        },
+        "a cue on pending changes",
+    ),
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                WORKTREE_SUMMARY, gate=[{"step": "escalated", "role": "director", "at": AT}]
+            )
+        },
+        "a gate step that doesn't exist",
+    ),
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                WORKTREE_SUMMARY,
+                gate=[{k: v for k, v in APPROVED_STEP.items() if k != "actor"}],
+            )
+        },
+        "an approved step without who approved",
+    ),
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                WORKTREE_SUMMARY,
+                changes={
+                    "state": "rejected",
+                    "settledAt": AT,
+                    "worktree": ".troupe/local/worktrees/x",
+                },
+            )
+        },
+        "rejected changes that still name a worktree",
+    ),
+    ("status-result.schema.json", {"runs": [], "notices": []}, "a status result without cues"),
     ("perform-result.schema.json", files("/etc/passwd"), "an absolute path"),
     ("perform-result.schema.json", files("C:/x.txt"), "a drive"),
     ("perform-result.schema.json", files("out\\x.txt"), "a backslash"),

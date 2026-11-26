@@ -529,7 +529,12 @@ CASES += [
                 {"run": RUN_IDS}, optional={"reason": TEXT, "rehearse": st.booleans()}
             ),
         )
-        for request_type, name in ((m.AcceptRequest, "accept"), (m.DiscardRequest, "discard"))
+        for request_type, name in (
+            (m.AcceptRequest, "accept"),
+            (m.DiscardRequest, "discard"),
+            (m.ApproveRequest, "approve"),
+            (m.RejectRequest, "reject"),
+        )
     ),
     (
         m.AcceptResult,
@@ -546,6 +551,30 @@ CASES += [
     (
         m.DiscardResult,
         "discard-result.schema.json",
+        st.fixed_dictionaries(
+            {
+                "run": RUN_IDS,
+                "worktree": st.just(".troupe/local/worktrees/0f8fad5b"),
+                "rehearsed": st.booleans(),
+                "notices": st.lists(NOTICES, max_size=2),
+            }
+        ),
+    ),
+    (
+        m.AcceptResult,
+        "approve-result.schema.json",
+        st.fixed_dictionaries(
+            {
+                "run": RUN_IDS,
+                "files": st.lists(TEXT, min_size=1, max_size=3),
+                "rehearsed": st.booleans(),
+                "notices": st.lists(NOTICES, max_size=2),
+            }
+        ),
+    ),
+    (
+        m.DiscardResult,
+        "reject-result.schema.json",
         st.fixed_dictionaries(
             {
                 "run": RUN_IDS,

@@ -449,7 +449,7 @@ def test_ctrl_c_during_a_command_that_cant_be_cancelled_changes_nothing(
     assert core.calls[1].session.theatre == Path.cwd()
 
 
-# Requirement: Approve and reject commands (spec: cli; manual-gates)
+# Requirement: Approve and reject commands (spec: gates)
 
 
 def test_approve_sends_the_run_and_reason_and_lists_the_files_it_kept(core: StandIn) -> None:
@@ -490,7 +490,7 @@ def test_a_rehearsed_reject_names_the_worktree_and_exits_would_change(core: Stan
     assert ran.out == [f"rejecting run {RUN_ID} would remove {WORKTREE}"]
 
 
-# Requirement: Status shows open cues and a run's gate (spec: cli)
+# Requirement: Status shows open cues and a run's gate (spec: gates)
 
 
 def test_status_shows_each_open_cue_before_the_runs(core: StandIn) -> None:
