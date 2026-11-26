@@ -260,7 +260,12 @@ def _check_parents(history: Sequence[RecordedEvent], events: dict[str, RecordedE
                     fix="Restore the file that held the missing event (git restore), or, if it "
                     "was removed on purpose, remove this file too.",
                     path=str(record.path),
-                    details={"missingParent": parent, "onlyIn": []},
+                    details={
+                        "line": record.line,
+                        "event": record.id,
+                        "missingParent": parent,
+                        "onlyIn": [],
+                    },
                 )
 
 

@@ -333,3 +333,28 @@ def test_a_merge_that_removes_a_runtime_an_actor_uses_is_a_conflict(repo: Repo) 
     assert conflict.rule is not None
     assert "no runtime named 'myhost'" in conflict.rule
     assert len(conflict.changes) == 2
+
+
+# Requirement: A missing parent is refused (spec: event-store): config reads its stream whole, so
+# its merge is what refuses (#506)
+
+
+def test_a_config_event_whose_parents_file_was_removed_by_hand_is_refused(repo: Repo) -> None:
+    set_config(repo, [(CHARACTER, "Second.")])
+    first, second = segments(repo.path)
+    [later] = [r for r in git_service(repo).history(aggregate.STREAM) if r.path.name == second.name]
+    first.unlink()
+    with pytest.raises(TroupeError) as caught:
+        read(git_service(repo))
+    error = caught.value
+    assert error.code == "events.missing-parent"
+    assert error.path is not None
+    assert Path(error.path).name == second.name
+    assert error.details == {
+        "line": later.line,
+        "event": later.id,
+        "missingParent": later.parents[0],
+        "onlyIn": [],
+    }
+    assert f"Line {later.line} " in error.problem
+    assert "Restore the file" in error.fix
