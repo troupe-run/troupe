@@ -76,7 +76,7 @@ def reject(made: Harness, run: str, **fields: Any) -> m.DiscardResult:  # noqa: 
 def conflicting(repo: Repo, approvers: list[str] | None = None) -> tuple[Recording, m.RunSummary]:
     """A run that changes src/a.txt while the person edits it too, so its diff won't apply."""
     made = Recording(repo)
-    made.on_running = lambda: (repo.path / "src" / "a.txt").write_text("mine\n", encoding="utf-8")
+    made.on_running = lambda: (repo.path / "src" / "a.txt").write_bytes(b"mine\n")
     return made, changing(made, approvers)
 
 
@@ -305,7 +305,8 @@ def test_approving_after_fixing_a_conflict_keeps_the_work_with_the_persons_appro
     repo: Repo,
 ) -> None:
     made, run = conflicting(repo)
-    (repo.path / "src" / "a.txt").write_text("one\n", encoding="utf-8")
+    # Bytes, as committed: write_text writes CRLF on Windows, which wouldn't undo the conflict.
+    (repo.path / "src" / "a.txt").write_bytes(b"one\n")
     result = approve(made, run.run_id[:8], reason="fine")
     assert result.files == ["src/a.txt"]
     assert (repo.path / "src" / "a.txt").read_text(encoding="utf-8") == "two\n"
