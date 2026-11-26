@@ -28,10 +28,12 @@ conflict is left out of replay too.
 **Clashes.** Two keys whose names come out the same: when one key's claim to the name (the write
 that gave it the name) follows the other's, the later one has it (on one line, a name can only be
 taken when nothing's there). When they're concurrent, the renames that claimed it are left out, so
-those keys fall back to their earlier names, and the clash is reported. A key whose own renames
-conflict keeps the name it falls back to over any other key, which waits: the conflict names it,
-and one change to it resolves it. A fallback that clashes again leaves its key out of config while
-the conflict stands.
+those keys fall back to their earlier names, and the clash is reported. The writes beneath a rename
+left out are contested again, as the merge's value contest does (#503), so the name a key falls back
+to is the one its history works out, never the last of them to arrive (#532). A key whose own
+renames conflict keeps the name it falls back to over any other key, which waits: the conflict
+names it, and one change to it resolves it. A fallback that clashes again leaves its key out of
+config while the conflict stands.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -221,7 +223,9 @@ class Entities:
             for name, keys in sorted(by_name.items()):
                 if len(keys) > 1:
                     named.clashed = True
-                    changed = self._settle(named, name, keys, claims, dropped, clash) or changed
+                    changed = (
+                        self._settle(named, name, keys, claims, dropped, clash, within) or changed
+                    )
             if not changed:
                 return
             named.states, _, new_claims = self._replay(within, dropped)
@@ -236,6 +240,7 @@ class Entities:
         claims: dict[Key, list[NameWrite]],
         dropped: set[Id],
         clash: "_Clash",
+        within: set[str],
     ) -> bool:
         """Settle one name that ``keys`` came out with; whether any name changed."""
         held = sorted(k for k in keys if k in clash.conflicted)
@@ -262,8 +267,19 @@ class Entities:
             named.hidden |= set(sorted(keys)[1:])
             return True
         dropped |= {c.id for k in renamed for c in claims[k] if c.rename}
+        self._contest_beneath(renamed, within, dropped)
         clash.fell_back |= set(renamed)
         return True
+
+    def _contest_beneath(self, keys: Iterable[Key], within: set[str], dropped: set[Id]) -> None:
+        """Contest again the writes of ``keys`` still in play, adding what drops to ``dropped``.
+        The writes a left-out rename covered may be concurrent; contested as ever, the name a key
+        falls back to is never the last of them to arrive (#532)."""
+        for key in keys:
+            live = [w for w in self.writes[key] if w.event in within and w.id not in dropped]
+            beneath = _contest(live, self.ancestors)
+            if beneath is not None:
+                dropped |= beneath[0]
 
     def _kept_by_a_rename(self, within: set[str], dropped: set[Id]) -> set[Id]:
         """Removals a later rename of the same entity kept it from: the rename follows the

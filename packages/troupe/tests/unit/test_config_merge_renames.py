@@ -441,6 +441,37 @@ def test_a_rename_and_a_removal_then_a_new_actor_of_the_old_name_conflict() -> N
     assert "qa" not in merged.config["actors"]
 
 
+# Found by the order property (#532)
+
+
+def test_a_rename_that_falls_back_lands_where_its_history_contests_it_in_every_order() -> None:
+    """One line removes reviewer, another renames it to qa; a settle joins them, which keeps
+    reviewer (a rename against a removal). Then one line sets reviewer's character and makes a new
+    tester, while the other renames reviewer to tester. The two testers clash, so the rename to
+    tester is left out and reviewer falls back. Where it falls back to is the history beneath,
+    contested as ever: the removal and the rename to qa still conflict, so reviewer keeps its own
+    name. It never takes the order they arrived in: the last of them used to win, losing reviewer
+    (it came out as qa, which tester has now) or showing it as the new tester."""
+    records = _base()
+    base = records[0].id
+    removed = _step(records, 3, base, [(("actors", "reviewer"), UNSET)])
+    to_qa = _step(records, 4, base, _rename("reviewer", "qa"))
+    settled = _settled(5, [removed, to_qa])
+    records.append(settled)
+    tester_to_qa = _step(records, 6, settled.id, _rename("tester", "qa"))
+    character = _step(records, 7, tester_to_qa, [(("actors", "qa", "character"), "A")])
+    reviewer = _step(records, 10, character, [(("actors", "reviewer", "character"), "A")])
+    _step(records, 11, reviewer, [(("actors", "tester"), dict(TESTER))])
+    _step(records, 14, character, _rename("reviewer", "tester"))
+    merged = _in_every_order(records)
+    assert merged.config["actors"] == {
+        "qa": {**TESTER, "character": "A"},
+        "reviewer": {**TESTER, "character": "A"},
+        "tester": TESTER,
+    }
+    assert [c.paths for c in merged.conflicts] == [(("actors", "tester"),)]
+
+
 # Properties for the review's two histories: the conflicts a rename makes, whatever each line does
 # after it. The properties above check order and equivalence, so a wrong but deterministic
 # conflict got past them.
