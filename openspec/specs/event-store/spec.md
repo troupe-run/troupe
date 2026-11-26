@@ -259,6 +259,12 @@ file holding the event, the missing parent, and the fix: restore the removed fil
 - **THEN** reading that stream fails with an error naming the later event's file and the missing parent ID
 - **AND** the fix says to restore the removed file or remove the dependent one
 
+#### Scenario: A config event's parent was removed by hand
+- **WHEN** the segment holding a config event is deleted while a later config event names it as a parent, and config
+  is read
+- **THEN** the read fails with `events.missing-parent`, naming the later event's file, its line, its ID and the missing
+  parent ID, as the protocol's details for that code require
+
 ### Requirement: Writers wait for each other, bounded and announced
 Recording SHALL be serialised across processes on one theatre. A writer that has to wait SHALL say what it is
 waiting for and give up after a timeout, following the platform's lock rules. The lock SHALL NOT be a tracked file.
