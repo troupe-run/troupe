@@ -2,7 +2,7 @@
 
 ## 1. The stand-in core
 
-- [ ] 1.1 Add `packages/troupe/tests/cli_core_stand_in.py` (design D1, D2, D4): replaces `troupe.cli.commands.call`
+- [x] 1.1 Add `packages/troupe/tests/cli_core_stand_in.py` (design D1, D2, D4): replaces `troupe.cli.commands.call`
   with the real `dispatch.call` bound to stand-in methods that keep each method's real request class, record each
   call's method, request and session, send given updates and return a given result, all protocol messages; and a
   way for a stand-in to press Ctrl-C by calling the installed SIGINT handler (D3). Verify a test using it passes and
@@ -10,10 +10,11 @@
 
 ## 2. troupe.cli.init (#519)
 
-- [ ] 2.1 Extend `tests/unit/test_cli_init_unit.py`: the `--runner` without `--audition` refusal, the request sent,
+- [x] 2.1 Extend `tests/unit/test_cli_init_unit.py`: the `--runner` without `--audition` refusal, the request sent,
   the made and rehearsed theatre with and without an actor, each step's commands and notes (each runner, the key's
   variable, its override and a malformed override, the token budget, the extra), notices, and exit codes. Verify the
-  file passes; commit
+  file passes; commit. Measured 2026-11-26: `troupe.cli.init` 412 of 423 killed (97.4%) before the last two tests
+  (aimed at two of the 11 left; the final run in 5.1 measures them)
 
 ## 3. troupe.cli.config (#518)
 
