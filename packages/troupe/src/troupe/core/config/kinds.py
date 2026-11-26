@@ -243,6 +243,7 @@ def actor_problems(
     found += schema_problems
     if not schema_problems:
         found += _expect_problems(base, actor)
+        found += _approvers_problems(base, actor)
     runner = actor.get("runner")
     moved: list[Problem] = []
     if isinstance(runner, str) and runner in interim.RUNNERS and not interim.installed(runner):
@@ -665,6 +666,28 @@ def _effect_pattern_problem(
     if error.instance.startswith("/"):
         rule += ". Runs get a scratch directory for temporary files without declaring it"
     return Problem(path[:4], rule, f"Change or remove {item} of {where}.")
+
+
+def _approvers_problems(base: tuple[str, ...], actor: Mapping[str, Any]) -> list[Problem]:
+    """The rules for an actor's approvers (spec: config, "An approvers list always ends with a
+    person", "An actor that works in place has no approvers"; manual-gates design D5)."""
+    approvers = actor.get("approvers")
+    if approvers is None:
+        return []
+    from troupe.core import gates
+
+    at = (*base, "approvers")
+    workspace = actor.get("workspace")
+    related = ((*base, "workspace"),) if workspace == "theatre" else ()
+    return [
+        Problem(
+            at,
+            rule.rule if not related else f"{rule.rule} ({shown(related[0])} is theatre)",
+            rule.fix,
+            related,
+        )
+        for rule in gates.approvers_problems(approvers, workspace=workspace)
+    ]
 
 
 def _expect_problems(base: tuple[str, ...], actor: Mapping[str, Any]) -> list[Problem]:

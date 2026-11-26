@@ -41,12 +41,24 @@
     },
     "workspace": {
       "title": "Workspace",
-      "description": "Where a run works. worktree, the default when absent: the run's own git worktree at HEAD, under .troupe/local/worktrees/, whose changes reach the theatre only through troupe accept. theatre: the theatre itself, so what the run writes lands among your files at once.",
+      "description": "Where a run works. worktree, the default when absent: the run's own git worktree at HEAD, under .troupe/local/worktrees/, whose changes reach the theatre only when they're kept at its gate (see approvers) or accepted. theatre: the theatre itself, so what the run writes lands among your files at once.",
       "type": "string",
       "enum": [
         "worktree",
         "theatre"
       ]
+    },
+    "approvers": {
+      "title": "Approvers",
+      "description": "Who may let a worktree run's work through, in order: troupe keeps the changes by itself when they apply cleanly and passes otherwise; director, held by whoever runs troupe, gets a cue and answers it with troupe approve or troupe reject. Absent means troupe, then director. The list ends with director, troupe can come only first, and each role is named once. Not for an actor whose workspace is theatre.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "troupe",
+          "director"
+        ]
+      }
     },
     "onContextFull": {
       "title": "When the context fills",

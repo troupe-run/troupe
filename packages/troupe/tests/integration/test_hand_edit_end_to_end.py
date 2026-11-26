@@ -48,7 +48,11 @@ def test_config_by_hand_from_init_to_sync(repo: Repo) -> None:
     repo.commit_all("Add a troupe theatre")
     yaml_text = (repo.path / LEAD_YAML).read_text("utf-8")
     (repo.path / LEAD_YAML).write_text(
-        "# lead: tuned by hand\n" + yaml_text + "workspace: theatre\n", encoding="utf-8"
+        # Working in place has no gate, so the audition's approvers go with it.
+        "# lead: tuned by hand\n"
+        + yaml_text.replace("approvers:\n  - director\n", "")
+        + "workspace: theatre\n",
+        encoding="utf-8",
     )
     (repo.path / LEAD_MD).write_bytes(b"You are terse.\n")
 

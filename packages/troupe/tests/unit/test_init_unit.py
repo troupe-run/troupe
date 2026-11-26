@@ -40,3 +40,11 @@ def test_every_runner_troupe_knows_has_an_audition_whose_config_is_valid(runner:
 
 def test_no_runner_named_means_claude_code() -> None:
     assert auditions.audition(None).runner == "claude-code"
+
+
+# Requirement: Every audition's actor waits for a person (spec: config; manual-gates decision 8)
+
+
+@pytest.mark.parametrize("runner", sorted(interim.RUNNERS))
+def test_every_auditions_actor_waits_at_a_gate_for_director(runner: str) -> None:
+    assert auditions.audition(runner).actor["approvers"] == ["director"]

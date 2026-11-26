@@ -99,9 +99,10 @@ approval, is refused while a cue is open, with `run.waiting-at-gate`. That backs
   workspace)`.
 - Config's actor check (`core/config/kinds.py`) calls it for each actor. So the rules apply to `config set`, to a
   hand edit's sweep, and to a merged config, all through `kinds.problems`. `core/config/merge.py` is untouched.
-- The actor schema types `approvers` as an array of `enum: ["troupe", "director"]` with `minItems: 1`, so editors
-  complete it. The order, ending in a person, no duplicates, and the workspace rule are in `approvers_problems`. Each
-  is a `config.invalid` problem naming the path and the fix.
+- The actor schema types `approvers` as an array of `enum: ["troupe", "director"]`, so editors complete it, and a
+  name it refuses isn't repeated, as for every value its shape refuses. The rest is in `approvers_problems`: the
+  order, ending in a person, no duplicates, the empty list (left out of the schema, so its fix can say that unsetting
+  gives the default), and the workspace rule. Each is a `config.invalid` problem naming the path and the fix.
 - Roles config later widens the names. The schema becomes a role-name pattern, and the check looks the name up in
   roles.
 - A run's start records `approvers: {value, source}` (snake_case in the payload, like `on_context_full`), resolved

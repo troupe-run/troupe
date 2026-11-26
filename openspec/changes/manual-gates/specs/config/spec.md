@@ -67,7 +67,8 @@ recorded. Plain `troupe init` SHALL record no config event.
 ### Requirement: An actor's approvers are an ordered list of roles
 An actor MAY have `approvers`, a list of role names, tried in order at its runs' gate (spec: gates). When it's absent,
 its runs SHALL use the built-in default, `[troupe, director]`. Until roles config exists, a name SHALL be `troupe` or
-`director`, and any other SHALL be refused, naming the path, the name and the two.
+`director`, and any other SHALL be refused, naming the path and the two, and repeating no part of the refused
+value (as for every value its shape refuses).
 
 #### Scenario: No approvers set
 - **WHEN** an actor has no `approvers`
@@ -75,7 +76,7 @@ its runs SHALL use the built-in default, `[troupe, director]`. Until roles confi
 
 #### Scenario: A role that doesn't exist yet
 - **WHEN** a person sets `actors.tester.approvers` to `["reviewer"]`
-- **THEN** it is refused with `config.invalid`, naming the path, `reviewer`, `troupe` and `director`
+- **THEN** it is refused with `config.invalid`, naming the path, `troupe` and `director`, and not `reviewer`
 - **AND** nothing is recorded
 
 ### Requirement: An approvers list always ends with a person

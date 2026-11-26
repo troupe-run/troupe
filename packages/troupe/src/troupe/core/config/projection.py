@@ -70,6 +70,7 @@ FIELD_ORDER = (
     "expect",
     "effects",
     "workspace",
+    "approvers",
     "onContextFull",
     "runtime",
     "model",

@@ -210,6 +210,7 @@ def test_the_ollama_actor_has_its_runtime_a_model_write_effects_no_expect_and_th
         "model": auditions.OLLAMA_AUDITION_MODEL,
         "effects": {"write": ["**"]},
         "expect": [],
+        "approvers": ["director"],
         "character": auditions.CHARACTER,
     }
     assert "workspace" not in lead
@@ -232,6 +233,7 @@ def test_the_openai_actor_names_its_runtime_and_model_with_small_limits_and_writ
         "options": {"maxTurns": 10, "maxTotalTokens": 100_000},
         "effects": {"write": ["**"]},
         "expect": [],
+        "approvers": ["director"],
         "character": auditions.CHARACTER,
     }
     assert "workspace" not in lead
@@ -254,6 +256,7 @@ def test_the_anthropic_actor_names_its_runtime_and_model_with_small_limits_and_w
         "options": {"maxTurns": 10, "maxTotalTokens": 100_000},
         "effects": {"write": ["**"]},
         "expect": [],
+        "approvers": ["director"],
         "character": auditions.CHARACTER,
     }
     assert "workspace" not in lead
@@ -272,6 +275,7 @@ def test_the_mistralrs_actor_names_the_in_process_runtime_and_no_model(repo: Rep
         "options": {"maxTurns": 10},
         "effects": {"write": ["**"]},
         "expect": [],
+        "approvers": ["director"],
         "character": auditions.CHARACTER,
     }
 
@@ -369,6 +373,7 @@ def test_the_claude_code_actor_has_a_small_budget_read_tools_write_effects_and_n
         "options": {"maxBudgetUsd": 1, "allowedTools": ["Read", "Glob", "Grep"]},
         "effects": {"write": ["**"]},
         "expect": [],
+        "approvers": ["director"],
         "character": auditions.CHARACTER,
     }
     assert "workspace" not in lead
@@ -611,3 +616,13 @@ def test_an_init_request_that_names_a_path_is_refused_naming_the_field(repo: Rep
     assert error.code == "client.invalid-request"
     assert "path" in error.problem
     assert not (repo.path / ".troupe").exists()
+
+
+# Requirement: Every audition's actor waits for a person (spec: config; manual-gates decision 8)
+
+
+def test_the_auditions_actor_file_holds_its_approvers(repo: Repo) -> None:
+    _init(repo.path, _env(repo), audition={"runner": "scripted"})
+    text = (repo.path / ".troupe" / "actors" / "lead.yaml").read_text(encoding="utf-8")
+    assert "approvers:\n  - director\n" in text
+    assert read(git_service(repo)).config["actors"]["lead"]["approvers"] == ["director"]
