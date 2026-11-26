@@ -1094,3 +1094,33 @@ def test_a_summary_whose_usage_has_a_counter_the_result_doesnt_define_is_refused
     data = {**copy.deepcopy(ENDED_SUMMARY), "usage": {"inputTokens": 1, "totalTokens": 2}}
     assert "usage" in _refused(m.RunSummary, data)
     assert not is_valid({"run": data}, "perform-result.schema.json")
+
+
+@pytest.mark.parametrize(
+    "actor",
+    [
+        {"kind": "system", "id": "core@build-01"},
+        {"kind": "human", "id": "ada@example.com", "source": "vcs"},
+        {"kind": "unknown"},
+    ],
+    ids=["system", "human", "unknown"],
+)
+def test_an_actor_the_lineage_schema_accepts_parses_and_serialises_back(
+    actor: dict[str, Any],
+) -> None:
+    assert m.ActorData.from_data(actor).to_data() == actor
+
+
+@pytest.mark.parametrize(
+    "actor",
+    [
+        {"kind": "system", "id": "core@build-01", "source": "troupe"},
+        {"kind": "system"},
+        {"kind": "human", "id": "ada@example.com"},
+        {"kind": "unknown", "id": "ada"},
+    ],
+    ids=["system with a source", "system without an id", "human without a source", "unknown id"],
+)
+def test_an_actor_the_lineage_schema_refuses_is_refused(actor: dict[str, Any]) -> None:
+    with pytest.raises(ProtocolError):
+        m.ActorData.from_data(actor)

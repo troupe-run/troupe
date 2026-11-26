@@ -94,6 +94,15 @@ EVENT: dict[str, Any] = {
             id="a run on a stage that doesn't enforce effects, and what allowed it",
         ),
         pytest.param(lineage(stage=ENFORCED), id="a run on a stage that enforces effects"),
+        pytest.param(
+            lineage(
+                actor={"kind": "system", "id": "core@build-01"},
+                approvals=[
+                    {"actor": {"kind": "system", "id": "core@build-01"}, "role": "troupe", "at": AT}
+                ],
+            ),
+            id="troupe acting by itself, approving in role troupe",
+        ),
         pytest.param(LINEAGE, id="an event recorded outside a stage, with no reason"),
         pytest.param(lineage(vcs={"adapter": "git", "head": "a" * 40}), id="a detached HEAD"),
         pytest.param(
@@ -114,6 +123,14 @@ def test_lineage_the_schema_accepts(value: dict[str, Any]) -> None:
         pytest.param(lineage(actor={"kind": "unknown", "id": "ada"}), id="unknown with an id"),
         pytest.param(lineage(actor={"kind": "human", "id": "", "source": "env"}), id="empty id"),
         pytest.param(lineage(actor={"kind": "human", "id": "ada"}), id="human without a source"),
+        pytest.param(
+            lineage(actor={"kind": "system", "id": "core@build-01", "source": "troupe"}),
+            id="a system actor with a source",
+        ),
+        pytest.param(lineage(actor={"kind": "system"}), id="a system actor without an id"),
+        pytest.param(
+            lineage(actor={"kind": "system", "id": "build-01"}), id="a system id with no component"
+        ),
         pytest.param(lineage(colour="blue"), id="an extra field"),
         pytest.param(lineage(via="email"), id="a via outside the closed set"),
         pytest.param(lineage(at="2026-10-12T03:04:05+10:00"), id="a time not in UTC"),

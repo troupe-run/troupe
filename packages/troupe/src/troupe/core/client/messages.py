@@ -81,14 +81,18 @@ class PerformRequest(Message):
 class ActorData(Message):
     """An actor, as lineage records it (lineage.schema.json#/$defs/actor)."""
 
-    kind: Literal["human", "agent", "unknown"] = json_field("kind")
+    kind: Literal["human", "agent", "system", "unknown"] = json_field("kind")
     id: str | None = json_field("id", default=None, min_length=1)
     source: str | None = json_field("source", default=None, min_length=1)
 
     def _check(self, where: str) -> None:
-        if (self.kind == "unknown") != (self.id is None and self.source is None):
-            raise fail(where, "an unknown actor has only a kind; any other has an id and source")
-        if self.kind != "unknown" and (self.id is None or self.source is None):
+        if self.kind == "unknown":
+            if self.id is not None or self.source is not None:
+                raise fail(where, "an unknown actor has only a kind")
+        elif self.kind == "system":
+            if self.id is None or self.source is not None:
+                raise fail(where, "a system actor has an id and no source")
+        elif self.id is None or self.source is None:
             raise fail(where, "a human or agent actor has an id and a source")
 
 
