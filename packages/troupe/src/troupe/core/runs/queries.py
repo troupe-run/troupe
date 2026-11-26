@@ -199,7 +199,7 @@ def _status(request: m.StatusRequest, session: Session, backends: Backends) -> m
     else:
         limit = request.limit or defaults.STATUS_RUNS_LIMIT
         chosen = list(reversed(runs.values()))[:limit]
-        # Every open cue, whatever the limit, newest first (spec: runs, "Status lists every open
+        # Every open cue, whatever the limit, newest first (spec: gates, "Status lists every open
         # cue").
         found = (view.open_cue() for view in runs.values())
         cues = sorted((c for c in found if c is not None), key=lambda c: c.raised_at, reverse=True)

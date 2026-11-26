@@ -218,7 +218,7 @@ def render_run(run: Mapping[str, Any]) -> list[str]:
 
 def render_gate(run: Mapping[str, Any]) -> list[str]:
     """A worktree run's approvers, with where they came from, and each step at its gate, for its
-    summary and its logs (spec: runs, "A run's summary shows its gate"; cli, "Status shows open
+    summary and its logs (spec: gates, "A run's summary shows its gate", "Status shows open
     cues and a run's gate")."""
     approvers = run.get("approvers")
     if approvers is None:
