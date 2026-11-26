@@ -48,7 +48,7 @@
 ## 7. Integration
 
 - [x] 7.1 Run `uv run scripts/check.py` with its output kept in a scratch file, and verify every gate passes, including `protocol_guard` and the size gate
-- [ ] 7.2 Run the first-run walkthrough end to end by hand with the scripted audition in a new repository: perform (exit 4), approve, drop the wait, perform again (kept by troupe, exit 0); record the transcript in the PR
+- [x] 7.2 Run the first-run walkthrough end to end by hand with the scripted audition in a new repository: perform (exit 4), approve, drop the wait, perform again (kept by troupe, exit 0); record the transcript in the PR
 
 ## Workflow follow-up
 
