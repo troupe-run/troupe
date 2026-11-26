@@ -22,7 +22,7 @@ prerelease: false
 | runtime | The service a runner talks to, or for an in-process runner the model file it loads: where it is, which model, and the variable its key is in, never the key itself. troupe has built-in ones, and config can define more |
 | engine | What runs the model itself, such as Claude's API, Ollama or mistral.rs. A runtime says how a runner reaches one |
 | notes | What a run teaches, fed into the next one |
-| gate | A point where work waits for a decision from whoever owns it. Every run that works in its own worktree passes one when it ends |
+| gate | A point where work waits for a decision from whoever owns it. Every run that works in its own worktree and succeeds with changes passes one when it ends |
 | approver | A role that may let a run's work through its gate. An actor lists its approvers in order: troupe, which keeps clean work by itself, then director, the role whoever runs troupe holds |
 | escalation | How an agent gets a decision: research first, then a brief to the right person |
 | cue | An open request to a role, with a brief. A gate raises one, and so does an escalation that can't resolve itself. The name is provisional |

@@ -6,8 +6,8 @@ prerelease: true
 ---
 
 A **gate** is a point where work waits for a decision from whoever owns it. Every run that works in its own
-worktree passes one when it ends: its actor's **approvers** say who may let its work through. Gates between the
-steps of a [flow](flows.md), and gates addressed to roles you define, come later
+worktree and succeeds with changes passes one when it ends: its actor's **approvers** say who may let its work
+through. Gates between the steps of a [flow](flows.md), and gates addressed to roles you define, come later
 ([#124](https://github.com/troupe-run/troupe/issues/124), [#148](https://github.com/troupe-run/troupe/issues/148)).
 
 ## Who approves

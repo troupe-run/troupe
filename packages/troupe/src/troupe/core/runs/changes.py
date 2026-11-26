@@ -39,7 +39,7 @@ from troupe.core.workspaces import remove_worktree, worktree_path
 SETTLED = ("accepted", "discarded", "rejected")
 
 
-def _view(store: EventStore, ref: str) -> RunView:
+def view_of(store: EventStore, ref: str) -> RunView:
     runs = read_runs(store)
     return runs[resolve(ref, runs)]
 
@@ -68,7 +68,7 @@ def _not_ended(view: RunView, state: m.State) -> TroupeError:
     )
 
 
-def _settled(view: RunView, changes: dict[str, Any]) -> TroupeError:
+def settled_error(view: RunView, changes: dict[str, Any]) -> TroupeError:
     return TroupeError(
         "run.changes-settled",
         problem=f"Run {view.run_id}'s changes were already {changes['state']}, at "
@@ -85,7 +85,7 @@ def _acceptable(view: RunView, theatre: Path) -> dict[str, Any]:
     if state != "ended":
         raise _not_ended(view, state)
     if changes["state"] in SETTLED:
-        raise _settled(view, changes)
+        raise settled_error(view, changes)
     if changes["state"] == "waiting":
         raise gates.waiting_at_gate(view.run_id, changes["cue"]["role"], discarding=False)
     if changes["state"] == "none":
@@ -117,7 +117,7 @@ async def diff(
     """The diff a worktree run's end references, verified against its reference."""
     backends = backends or Backends()
     store = await asyncio.to_thread(backends.event_store, session)
-    view = await asyncio.to_thread(_view, store, request.run)
+    view = await asyncio.to_thread(view_of, store, request.run)
     changes = _worktree_changes(view)
     state = run_state(view, session.theatre)
     if state != "ended" and changes["state"] != "discarded":
@@ -141,13 +141,13 @@ async def diff(
     )
 
 
-def _settle_lock(theatre: Path, run_id: str) -> Path:
+def settle_lock(theatre: Path, run_id: str) -> Path:
     path = lease_dir(theatre, run_id) / "settle"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
-def _record(
+def record_settling(
     store: EventStore,
     run_id: str,
     reason: str | None,
@@ -222,7 +222,7 @@ def keep(
     finally:
         with contextlib.suppress(FileNotFoundError):
             patch.unlink()
-    _record(
+    record_settling(
         store,
         view.run_id,
         reason,
@@ -249,11 +249,11 @@ def _accept(
     theatre = session.theatre
     store = backends.event_store(session)
     store.identify()  # who is accepting: refused before anything changes when no one answers
-    view = _view(store, request.run)
+    view = view_of(store, request.run)
     changes = _acceptable(view, theatre)
     data = backends.artifact_store(session).read(changes["diff"])
-    with directory_lock(_settle_lock(theatre, view.run_id)):
-        view = _view(store, view.run_id)  # again, inside the lock: another accept may have won
+    with directory_lock(settle_lock(theatre, view.run_id)):
+        view = view_of(store, view.run_id)  # again, inside the lock: another accept may have won
         changes = _acceptable(view, theatre)
         return keep(
             store,
@@ -287,7 +287,7 @@ def _discard(
     theatre = session.theatre
     store = backends.event_store(session)
     store.identify()
-    view = _view(store, request.run)
+    view = view_of(store, request.run)
 
     def check(view: RunView) -> dict[str, Any]:
         changes = _worktree_changes(view)
@@ -295,18 +295,18 @@ def _discard(
         if state in ("running", "unfinished-elsewhere"):
             raise _not_ended(view, state)
         if changes["state"] in SETTLED:
-            raise _settled(view, changes)
+            raise settled_error(view, changes)
         if changes["state"] == "waiting":
             raise gates.waiting_at_gate(view.run_id, changes["cue"]["role"], discarding=True)
         return changes
 
     changes = check(view)
-    with directory_lock(_settle_lock(theatre, view.run_id)):
-        view = _view(store, view.run_id)
+    with directory_lock(settle_lock(theatre, view.run_id)):
+        view = view_of(store, view.run_id)
         changes = check(view)
         if not request.rehearse:
             remove_worktree(store.vcs, theatre, view.run_id, announce)
-            _record(store, view.run_id, request.reason, lambda run: run.discard_changes())
+            record_settling(store, view.run_id, request.reason, lambda run: run.discard_changes())
     return m.DiscardResult(
         run=view.run_id, worktree=changes["worktree"], rehearsed=bool(request.rehearse), notices=[]
     )
