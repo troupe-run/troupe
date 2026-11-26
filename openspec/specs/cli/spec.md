@@ -224,8 +224,9 @@ the run's error SHALL be shown on standard error with the run id.
 - **AND** standard error shows the run id, the problem and the fix
 
 ### Requirement: Perform's exit code follows the run's outcome
-`troupe perform` SHALL exit 0 when the run `succeeded`, 130 when it was `cancelled`, and 1 for every other outcome. A
-`perform` refused before the run starts SHALL exit with its error's code.
+`troupe perform` SHALL exit 0 when the run `succeeded` and nothing of it waits at a gate, 4 when it `succeeded` and
+its work waits at a gate for a role's answer, 130 when it was `cancelled`, and 1 for every other outcome. A `perform`
+refused before the run starts SHALL exit with its error's code.
 
 #### Scenario: Cancelled with Ctrl-C
 - **WHEN** a person cancels a run with Ctrl-C
@@ -234,6 +235,14 @@ the run's error SHALL be shown on standard error with the run id.
 #### Scenario: A crashed run
 - **WHEN** a run ends `crashed`
 - **THEN** `troupe perform` exits 1
+
+#### Scenario: Waiting at a gate
+- **WHEN** a run of an actor with approvers `[director]` ends `succeeded` with changes
+- **THEN** `troupe perform` exits 4, and the exit-code table names 4 as waiting at a gate
+
+#### Scenario: Kept at the gate
+- **WHEN** a run with the default approvers ends `succeeded` and `troupe` keeps its changes
+- **THEN** `troupe perform` exits 0
 
 ### Requirement: Status and logs commands
 `troupe status [<run>] [--limit <n>]` SHALL show runs, and `troupe logs <run> [--follow]` SHALL show a run's log,
@@ -336,13 +345,23 @@ output exactly as captured, and SHALL take `--json`. `troupe accept` and `troupe
 
 ### Requirement: Perform says where a worktree run works
 `troupe perform` SHALL show, on standard error before the first event, the workspace of a worktree run with its
-path. A rehearsal SHALL show the workspace it would use. When a worktree run's changes are pending at its end, the CLI
-SHALL say how to see, accept or discard them.
+path. A rehearsal SHALL show the workspace it would use. At a worktree run's end, the CLI SHALL say what became of
+its changes: kept at the gate, naming the files and who approved them; waiting at a gate, naming the role and how to
+see, approve or reject them; or pending, naming how to see, accept or discard them.
 
 #### Scenario: The end of a worktree run
-- **WHEN** a worktree run ends with changes
+- **WHEN** a worktree run ends `failed` with changes
 - **THEN** standard error names the worktree and the commands `troupe diff`, `troupe accept` and `troupe discard` for
   the run
+
+#### Scenario: The end of a run kept at the gate
+- **WHEN** a worktree run ends `succeeded` and `troupe` keeps its changes to `src/a.txt`
+- **THEN** standard error says its changes were kept, approved by `troupe`, naming `src/a.txt`
+
+#### Scenario: The end of a run waiting at a gate
+- **WHEN** a worktree run's gate raises a cue for `director` after `troupe` passed on a conflict in `src/a.txt`
+- **THEN** standard error says the run waits for `director` because `src/a.txt` conflicts, names the worktree, and
+  names `troupe diff`, `troupe approve` and `troupe reject` for the run
 
 #### Scenario: Rehearsing a worktree perform
 - **WHEN** a person runs `troupe perform tester --rehearse` for an actor whose workspace is `worktree`
@@ -430,12 +449,17 @@ the profile for the platform, so that it applies to every theatre the person run
 #### Scenario: The printed steps work in an empty repository
 - **WHEN** a person runs `troupe init --audition --runner scripted` in an empty git repository, then each printed
   step in order, offline
-- **THEN** the `troupe perform` it printed ends `succeeded` and exits 0
+- **THEN** the `troupe perform` it printed ends `succeeded`, waits at a gate for `director`, and exits 4
 
 #### Scenario: The printed steps work with Claude Code
 - **WHEN** a person with Claude Code installed and logged in runs `troupe init --audition` in an empty git
   repository, then each printed step in order
-- **THEN** the `troupe perform` it printed ends `succeeded` and exits 0
+- **THEN** the `troupe perform` it printed ends `succeeded`, waits at a gate for `director`, and exits 4
+
+#### Scenario: The perform step names the gate
+- **WHEN** a person runs `troupe init --audition`
+- **THEN** the perform step's note names `troupe diff`, `troupe approve` and `troupe reject`, and doesn't name
+  `troupe accept`
 
 ### Requirement: Init's audition runner is named with --runner
 `troupe init --audition --runner <runner>` SHALL define the example actor for that runner. Claude Code SHALL be the

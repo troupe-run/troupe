@@ -50,8 +50,7 @@ see, approve or reject them; or pending, naming how to see, accept or discard th
 
 ### Requirement: Init prints the next steps for its audition
 After an audition, `troupe init` SHALL print, in order: committing `.troupe/`, allowing the local stage when policy
-doesn't already allow it, and `troupe perform lead` with an example `--direction`, whose note says the run waits for the person to approve
-or reject it, naming `troupe approve` and `troupe reject`. For Claude Code it SHALL say that
+doesn't already allow it, and `troupe perform lead` with an example `--direction`. For Claude Code it SHALL say that
 Claude Code must be installed and logged in. The allow step SHALL say to add its line to the shell profile once, naming
 the profile for the platform, so that it applies to every theatre the person runs.
 
@@ -89,35 +88,3 @@ the profile for the platform, so that it applies to every theatre the person run
 - **WHEN** a person runs `troupe init --audition`
 - **THEN** the perform step's note names `troupe diff`, `troupe approve` and `troupe reject`, and doesn't name
   `troupe accept`
-
-## ADDED Requirements
-
-### Requirement: Approve and reject commands
-The CLI SHALL offer `troupe approve <run>` and `troupe reject <run>`, each calling the core through the client
-protocol, naming the run by id or unique prefix, and taking `--reason` and `--rehearse`. Each SHALL write what it did
-to standard output: the files it kept, or the worktree it removed.
-
-#### Scenario: Approve
-- **WHEN** a person runs `troupe approve <run> --reason "fine"` on a run waiting for `director`
-- **THEN** it exits 0, the run's changes are in the working tree, and standard output names the run and the files
-
-#### Scenario: Reject
-- **WHEN** a person runs `troupe reject <run> --reason "wrong file"` on a run waiting for `director`
-- **THEN** it exits 0, and standard output names the run and the worktree it removed
-
-#### Scenario: Rehearsing an approve
-- **WHEN** a person runs `troupe approve <run> --rehearse` and the diff applies cleanly
-- **THEN** it exits with the "would change" code and names the files it would change, and nothing changes
-
-### Requirement: Status shows open cues and a run's gate
-`troupe status` SHALL show the open cues before the runs, one line each with the run, its actor, the role and when the
-cue was raised. `troupe status <run>` SHALL show the run's approvers with their source and its gate's steps, and the
-run list SHALL show a waiting run's changes as `waiting` with the role.
-
-#### Scenario: An open cue in the list
-- **WHEN** a run of `writer` waits for `director`, and a person runs `troupe status`
-- **THEN** standard output starts with a line naming the run, `writer`, `director` and when the cue was raised
-
-#### Scenario: A run's approvers
-- **WHEN** a person runs `troupe status <run>` for a run of an actor with no approvers set
-- **THEN** it shows `approvers: troupe, director (default)`
