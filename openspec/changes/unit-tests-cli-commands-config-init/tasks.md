@@ -18,12 +18,14 @@
 
 ## 3. troupe.cli.config (#518)
 
-- [ ] 3.1 Extend `tests/unit/test_cli_config_unit.py` for `config set`, `unset` and `mv`: requests (reason,
+- [x] 3.1 Extend `tests/unit/test_cli_config_unit.py` for `config set`, `unset` and `mv`: requests (reason,
   rehearse, typed values, the runner a value is typed for), the `path=value` refusal, entry, file and hand-edit
   lines, nothing changed, rehearsals and the recorded change. Verify the file passes
-- [ ] 3.2 Add `tests/unit/test_cli_config_get_unit.py` for `config get` (value, string, nothing set, empty, conflicts
+- [x] 3.2 Add `tests/unit/test_cli_config_get_unit.py` for `config get` (value, string, nothing set, empty, conflicts
   and shortened values, `--resolved`, `--json`), `sync`, `config drop` and `config keep`. Verify the file passes;
-  commit
+  commit. Measured 2026-11-26: `troupe.cli.config` 793 of 858 killed (92.4%) before the tests of notices and Ctrl-C
+  during every config command, and the stand-in's refusal of a call with no session (aimed at most of the 65 left;
+  the final run in 5.1 measures them)
 
 ## 4. troupe.cli.commands (#517)
 
