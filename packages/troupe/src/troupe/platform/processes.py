@@ -527,6 +527,17 @@ def namespace_token() -> str | None:
     return " ".join(parts)
 
 
+def host_name() -> str:
+    """This machine's name, as the OS gives it, lower-cased, with any space or ``@`` made a ``-``
+    so it can follow ``@`` in a system actor's id (manual-gates design D2). ``localhost`` when the
+    OS gives none."""
+    import re
+    import socket
+
+    name = re.sub(r"[\s@]+", "-", socket.gethostname().strip().lower()).strip("-")
+    return name or "localhost"
+
+
 def _namespace_parts() -> tuple[str, ...]:
     import socket
 

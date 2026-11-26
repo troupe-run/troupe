@@ -32,6 +32,7 @@ from troupe.core import defaults, strict_json
 from troupe.core.errors import TroupeError
 from troupe.core.events.lineage import (
     Actor,
+    Approval,
     Cause,
     CommandCause,
     EventCause,
@@ -161,9 +162,11 @@ class EventStore:
         via: Via,
         actor: Actor | None = None,
         reason: str | None = None,
+        approvals: Sequence[Approval] = (),
     ) -> list[Recorded]:
         """Record ``events`` in reaction to the event ``trigger``: they carry its change id and
-        name it as their cause (design D8)."""
+        name it as their cause (design D8). ``approvals`` is filled in only by a gate keeping a
+        run's work (manual-gates design D1)."""
         triggered = self.recorder.event(trigger)
         if triggered is None:
             raise _cause_unknown(trigger)
@@ -183,6 +186,7 @@ class EventStore:
             change=trigger_lineage["change"],
             cause=EventCause(trigger),
             vcs=self.vcs_state(),
+            approvals=tuple(approvals),
         )
         return self.record_with_lineage(events, lineage)
 
@@ -346,7 +350,7 @@ class Command:
             change=self.change,
         )
 
-    def lineage(self, source: Source | None = None) -> Lineage:
+    def lineage(self, source: Source | None = None, approvals: Sequence[Approval] = ()) -> Lineage:
         return Lineage(
             actor=self.actor,
             via=self.via,
@@ -355,6 +359,7 @@ class Command:
             change=self.change,
             cause=CommandCause(self.change),
             vcs=self.store.vcs_state(source),
+            approvals=tuple(approvals),
             stage=self.stage,
         )
 
@@ -365,6 +370,7 @@ class Command:
         source: Source | None = None,
         settles: Sequence[str] | None = None,
         requires: Sequence[str] = (),
+        approvals: Sequence[Approval] = (),
     ) -> list[Recorded]:
         """Record ``events`` as this command's own, all or nothing. With ``settles``, the first
         event is a settling event whose parents are those heads, every head of its stream, and the
@@ -372,7 +378,7 @@ class Command:
         aggregate that merges its own forks does (config-model design D5). ``requires`` names
         events that must still be here when the batch is written (abandoned-edits design D4)."""
         return self.store.record_with_lineage(
-            events, self.lineage(source), settling_parents=settles, requires=requires
+            events, self.lineage(source, approvals), settling_parents=settles, requires=requires
         )
 
     def settle(self, aggregate: Aggregate) -> Recorded:

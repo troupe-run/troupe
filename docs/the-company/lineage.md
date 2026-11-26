@@ -11,7 +11,8 @@ theatre's history can answer: who did this, through what, when, why, as part of 
 ## What lineage says
 
 - **`actor`:** who made the change: a person (`human`) or an agent (`agent`), with an id and where the id came
-  from. It's never empty. Where nobody can be known, such as a hand edit to a file, it says so explicitly
+  from, or troupe acting by itself (`system`), with an id naming troupe's core and the computer it ran on, such as
+  `core@build-01`. It's never empty. Where nobody can be known, such as a hand edit to a file, it says so explicitly
   (`unknown`) rather than guessing.
 - **`via`:** the surface it came through: the command line (`cli`), a file, a runner, or the run server.
 - **`at`:** when troupe recorded it, in UTC.
@@ -19,7 +20,9 @@ theatre's history can answer: who did this, through what, when, why, as part of 
 - **`change`:** the id of the command that started it. Every event that follows from one command carries the same
   change id, including events recorded in reaction to it, so you can gather everything one command caused.
 - **`cause`:** what made it happen: the command itself, or the event it reacted to.
-- **`approvals`:** who approved it, and in which role. It's empty until gates exist.
+- **`approvals`:** who approved it, and in which role. Only the event that keeps a run's work at a
+  [gate](gates-and-decisions.md) has one: troupe's own, in role `troupe`, when the changes applied cleanly, or a
+  person's, in role `director`, when they approved it. Every other event's is empty.
 - **`vcs`:** the version-control state it was made in: the branch and commit, and for a change made from a file,
   the file and its contents before and after, by hash.
 - **`stage`:** for an event a run recorded, the stage the actor ran on, whether troupe could enforce what it
@@ -55,8 +58,7 @@ it still matches.
 - **Roles.** Work will go to roles, and lineage will record which holder acted and in which role
   ([#61](https://github.com/troupe-run/troupe/issues/61)). How a raw identity, such as an email address, maps to a
   person is open in [#44](https://github.com/troupe-run/troupe/issues/44).
-- **Approvals.** `approvals` fills in once [gates](gates-and-decisions.md) exist.
-- **troupe acting by itself.** When troupe observes a change, such as a merge, it will record it as an actor of
-  kind `system`. That kind is decided, but troupe doesn't record it yet.
+- **troupe observing changes.** troupe records its own approvals at a gate as `system` today. When it observes a
+  change by itself, such as a merge, it will record that as `system` too.
 
 [Read the lineage](../stagecraft/read-the-lineage.md) shows how to answer questions from it.

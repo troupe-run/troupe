@@ -2,14 +2,14 @@
 
 ## 1. Lineage: the system actor
 
-- [ ] 1.1 Add the `system` actor kind (`{kind, id}`, no source) to `protocol/schemas/lineage.schema.json`, run `uv run scripts/package_schemas.py`, and verify its `--check` test passes
-- [ ] 1.2 Teach `core/events/lineage.py` (`_actor_problem`, the actor types and `actor_data`), `core/identity.py`'s `Kind` and `core/client/messages.py`'s `ActorData` the `system` kind; verify with unit tests that a system actor is accepted and that one with a `source` is refused with `events.lineage-invalid` (`tests/unit/test_event_schemas.py` cases included)
-- [ ] 1.3 Add the core's system actor builder (`core@<host>`, host through the platform seam) and a test pinning its id shape on the running host
-- [ ] 1.4 Update `docs/the-company/lineage.md` and `contributing/event-store.md` for the `system` kind and for filled-in approvals; verify the docs check passes
+- [x] 1.1 Add the `system` actor kind (`{kind, id}`, no source) to `protocol/schemas/lineage.schema.json`, run `uv run scripts/package_schemas.py`, and verify its `--check` test passes
+- [x] 1.2 Teach `core/events/lineage.py` (`_actor_problem`, a `System` actor type and `actor_data`) and `core/client/messages.py`'s `ActorData` the `system` kind, leaving `core/identity.py`'s `Kind` as `human`/`agent` so no identity source can produce it; verify with unit tests that a system actor is accepted and that one with a `source` is refused with `events.lineage-invalid` (`tests/unit/test_event_schemas.py` cases included)
+- [x] 1.3 Add the core's system actor builder (`core@<host>`, host through the platform seam) and a test pinning its id shape on the running host
+- [x] 1.4 Update `docs/the-company/lineage.md` and `contributing/event-store.md` for the `system` kind and for filled-in approvals; verify the docs check passes
 
 ## 2. Config: approvers on the actor
 
-- [ ] 2.1 Add `core/gates.py` with the role names, the default `[troupe, director]` and `approvers_problems`; unit-test each rule (unknown name, empty, duplicate, `troupe` not first, not ending in `director`, set with `workspace: theatre`), including a hypothesis test that every list it accepts ends in `director` and starts with at most one `troupe`
+- [x] 2.1 Add `core/gates.py` with the role names, the default `[troupe, director]` and `approvers_problems`; unit-test each rule (unknown name, empty, duplicate, `troupe` not first, not ending in `director`, set with `workspace: theatre`), including a hypothesis test that every list it accepts ends in `director` and starts with at most one `troupe`
 - [ ] 2.2 Add `approvers` to `protocol/schemas/config/actor.schema.json` (with a description), regenerate the packaged schemas and `core/config/models.py`, and verify both `--check` tests pass
 - [ ] 2.3 Call `approvers_problems` from `core/config/kinds.py`'s actor check; verify with integration tests that `troupe config set` refuses each case with `config.invalid` naming the path, that a hand edit of `approvers: [troupe]` is refused by the sweep, and that `'actors.tester.approvers=["director"]'` is recorded
 - [ ] 2.4 Set `approvers: ["director"]` on every audition in `core/audition.py`; update the pinned audition dicts and file checks in `tests/integration/test_init.py` and `test_cli_init.py`, and verify `test_init_unit.py` still finds every audition valid

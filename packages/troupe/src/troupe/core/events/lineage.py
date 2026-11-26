@@ -30,11 +30,31 @@ class Unknown:
         return {"kind": "unknown"}
 
 
-Actor = Identity | Unknown
+SYSTEM_ID = re.compile(r"^[a-z][a-z0-9-]*@[^\s@]+$")
+
+
+@dataclass(frozen=True)
+class System:
+    """troupe acting by itself, such as approving a run's changes at a gate (spec: lineage, "The
+    actor is never null"; manual-gates design D2). Its id names the component and the host it runs
+    on (``core@build-01``, #15). No identity source resolved it, so it has no source."""
+
+    id: str
+
+    def __post_init__(self) -> None:
+        if not SYSTEM_ID.match(self.id):
+            msg = f"a system actor's id is <component>@<host>: {self.id!r}"
+            raise ValueError(msg)
+
+    def to_data(self) -> dict[str, Any]:
+        return {"kind": "system", "id": self.id}
+
+
+Actor = Identity | System | Unknown
 
 
 def actor_data(actor: Actor) -> dict[str, Any]:
-    if isinstance(actor, Unknown):
+    if isinstance(actor, Unknown | System):
         return actor.to_data()
     return {"kind": actor.kind, "id": actor.id, "source": actor.source}
 
@@ -238,8 +258,12 @@ def _actor_problem(name: str, actor: object) -> str | None:
     kind = actor.get("kind")
     if kind == "unknown":
         return None if set(actor) == {"kind"} else f"{name}: an unknown actor has only a kind"
+    if kind == "system":
+        if set(actor) != {"kind", "id"}:
+            return f"{name}: a system actor has only a kind and an id, and no source"
+        return _match(f"{name}.id", actor["id"], SYSTEM_ID, "<component>@<host>")
     if kind not in ("human", "agent"):
-        return f"{name}.kind must be human, agent or unknown"
+        return f"{name}.kind must be human, agent, system or unknown"
     problem = _fields(name, set(actor), {"kind", "id", "source"})
     if problem:
         return problem

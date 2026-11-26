@@ -131,7 +131,7 @@ Where an event came from: who made it, through what, when, why, as part of which
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `actor` | object | Yes | Who made the event. Never null: where nobody can be known, such as a hand edit to a file, the kind is an explicit unknown. |
+| `actor` | object | Yes | Who made the event: a person or an agent resolved through an identity source, troupe itself (system), or, where nobody can be known, such as a hand edit to a file, an explicit unknown. Never null. |
 | `via` | one of `"cli"`, `"file"`, `"runner"`, `"server"` | Yes | The surface the event came through. A closed set: a new surface is a schema change. |
 | `at` | string | Yes | When troupe recorded the event, in UTC. |
 | `reason` | string | No | Why, in the actor's words. Absent: none was given. |

@@ -60,8 +60,9 @@ The pieces a gate builds on are already in place:
   with the end's change id: the gate is a reaction to the end.
 - The identity port is untouched. A system actor is never resolved from a source; the core builds it, like the agent
   actor `perform` builds today (`source="troupe"`).
-- `core/identity.py`'s `Kind` and the client protocol's `ActorData` gain `system`, so status and logs can show who
-  approved.
+- The client protocol's `ActorData` gains `system`, so status and logs can show who approved. `core/identity.py`'s
+  `Kind` stays `human` or `agent`: no identity source, `TROUPE_ACTOR` included, can claim to be troupe. A system
+  actor is its own lineage type.
 
 ### D3. Where the gate runs, and the crash windows
 

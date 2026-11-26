@@ -19,6 +19,7 @@ from troupe.core.events.lineage import (
     Lineage,
     Source,
     StageLineage,
+    System,
     Unknown,
     VcsState,
     lineage_problem,
@@ -31,6 +32,7 @@ HASH = "sha256:" + "ab" * 32
 ACTORS: list[Actor] = [
     Identity(kind="human", id="ada@example.com", source="vcs"),
     Identity(kind="agent", id="tester", source="troupe"),
+    System(id="core@build-01"),
     Unknown(),
 ]
 SOURCES = [
@@ -71,7 +73,7 @@ def build(
     )
 
 
-@pytest.mark.parametrize("actor", ACTORS, ids=["human", "agent", "unknown"])
+@pytest.mark.parametrize("actor", ACTORS, ids=["human", "agent", "system", "unknown"])
 @pytest.mark.parametrize("via", VIA)
 @pytest.mark.parametrize("cause_kind", ["command", "event"])
 @pytest.mark.parametrize("source", SOURCES, ids=["no file", "edited", "created", "deleted"])
@@ -109,6 +111,8 @@ INVALID: list[dict[str, Any]] = [
     lineage(actor={"kind": "unknown", "id": "ada"}),
     lineage(actor={"kind": "human", "id": "", "source": "env"}),
     lineage(actor={"kind": "human", "id": "ada"}),
+    lineage(actor={"kind": "system", "id": "core@build-01", "source": "troupe"}),
+    lineage(actor={"kind": "system", "id": "build-01"}),
     lineage(colour="blue"),
     lineage(via="email"),
     lineage(at="2026-10-12T03:04:05+10:00"),
@@ -318,3 +322,27 @@ def test_the_hand_written_check_names_the_stage_when_it_is_at_fault() -> None:
 
 def test_a_year_before_1000_is_written_with_four_digits_on_every_platform() -> None:
     assert timestamp(datetime(999, 1, 2, 3, 4, 5, 6000, tzinfo=UTC)) == "0999-01-02T03:04:05.006Z"
+
+
+def test_a_system_actor_id_must_name_a_component_and_a_host() -> None:
+    with pytest.raises(ValueError, match="<component>@<host>"):
+        System(id="build-01")
+
+
+def test_lineage_with_troupes_own_approval_validates() -> None:
+    change = new_ulid()
+    troupe = System(id="core@build-01")
+    built = build(troupe, "cli", EventCause(HASH), None, change)
+    data = Lineage(
+        actor=troupe,
+        via="cli",
+        at=built.at,
+        reason=None,
+        change=change,
+        cause=built.cause,
+        vcs=built.vcs,
+        approvals=(Approval(actor=troupe, role="troupe", at=built.at),),
+    ).to_data()
+    assert data["actor"] == {"kind": "system", "id": "core@build-01"}
+    assert is_valid(data, "lineage.schema.json")
+    assert lineage_problem(data) is None

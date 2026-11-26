@@ -187,13 +187,13 @@ say is left out, never written as `null`.
 
 | Field | What it says |
 |---|---|
-| `actor` | `human` or `agent` with an id and the source that resolved it, or an explicit `{kind: unknown}` (for a hand edit). Always present. |
+| `actor` | `human` or `agent` with an id and the source that resolved it, `system` with an id naming troupe's component and host (`core@<host>`) and no source, or an explicit `{kind: unknown}` (for a hand edit). Always present. |
 | `via` | `cli`, `file`, `runner` or `server` |
 | `at` | When troupe recorded it, in UTC with milliseconds |
 | `reason` | Why, in the actor's words. Left out when none was given |
 | `change` | The correlation id: minted by a command, and carried by every event that follows from it |
 | `cause` | `{kind: command, id: <change>}` for a command's own events, or `{kind: event, id: <id>}` for a reaction |
-| `approvals` | Who approved it, in which role; empty until gates exist |
+| `approvals` | Who approved it, in which role: one approval on the acceptance that keeps a run's work at a gate (troupe's, in role `troupe`, or a person's, in role `director`), and empty on every other event |
 | `vcs` | The adapter; the branch, left out when HEAD is detached or the adapter has no branches; HEAD, left out before the first commit; and for an event made from a file, its theatre-relative path and its before and after content hashes, each left out when the file didn't exist or no longer does |
 | `stage` | For an event a run recorded, the stage the actor ran on and whether its effects were `enforced` or `unenforced`; for an unenforced run, the policy setting and source that allowed it (`allowedBy`). Left out for every other event |
 

@@ -59,7 +59,7 @@
     },
     "actor": {
       "title": "Actor",
-      "description": "Who made the event. Never null: where nobody can be known, such as a hand edit to a file, the kind is an explicit unknown.",
+      "description": "Who made the event: a person or an agent resolved through an identity source, troupe itself (system), or, where nobody can be known, such as a hand edit to a file, an explicit unknown. Never null.",
       "oneOf": [
         {
           "type": "object",
@@ -72,6 +72,19 @@
               "description": "The identity source that resolved the actor, such as env, vcs or os-login, or troupe for an agent troupe assigned.",
               "type": "string",
               "minLength": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id"],
+          "properties": {
+            "kind": {"const": "system"},
+            "id": {
+              "description": "troupe acting by itself: the component and the host it runs on, such as core@build-01. No identity source resolved it, so it has none.",
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*@[^\\s@]+$"
             }
           }
         },
