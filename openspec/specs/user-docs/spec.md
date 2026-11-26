@@ -178,7 +178,7 @@ the site publishes only `docs/`.
 
 ### Requirement: The glossary is the single source of troupe's vocabulary
 `docs/prompt-book/glossary.md` SHALL hold one table row per term, each term in plain text. It SHALL have rows for
-stage, rehearsal, audition, system and cue, and cue's meaning SHALL mark it as provisional. The glossary and the
+stage, rehearsal, audition, system, cue and approver, and cue's meaning SHALL mark it as provisional. The glossary and the
 house's page SHALL NOT call the house's name unconfirmed ("TBC", "isn't final").
 
 #### Scenario: A term in code font
@@ -201,6 +201,10 @@ house's page SHALL NOT call the house's name unconfirmed ("TBC", "isn't final").
 #### Scenario: A duplicate that differs only in case or spacing
 - **WHEN** the glossary has a row for "the house" and another for "The  House"
 - **THEN** the docs check fails, naming the term as the first row writes it, and that it has 2 rows
+
+#### Scenario: No approver row
+- **WHEN** the glossary has no row for approver
+- **THEN** the docs check fails, naming approver
 
 ### Requirement: The user docs say theatre for a theatre
 Every line in `docs/` that says "project", "repo" or "repository" (or their plurals) SHALL be recorded, with the
@@ -228,8 +232,8 @@ The first-run walkthrough SHALL start from `troupe init --audition` in the reade
 - **WHEN** the docs check runs each command the walkthrough gives, in order, in a git repository with a commit, with a
   stand-in `claude` on the path
 - **THEN** `troupe init --audition` exits 0, and the `troupe perform lead --direction "..."` it gives prints
-  `run <id> succeeded` and exits 0
-- **AND** the `troupe diff`, `troupe accept`, `troupe status` and `troupe logs` it gives each exit 0 for that run
+  `run <id> succeeded` and exits 4, waiting at a gate for `director`
+- **AND** the `troupe diff`, `troupe approve`, `troupe status` and `troupe logs` it gives each exit 0 for that run
 
 #### Scenario: The walkthrough's steps are the ones init prints
 - **WHEN** the docs check compares the walkthrough's commit and allow commands with what `troupe init --audition`
@@ -244,7 +248,7 @@ check, with no `claude` on the path.
 #### Scenario: The offline walkthrough runs as written
 - **WHEN** the docs check runs each command of the offline path, in order, in a new git repository with no `claude`
   on the path
-- **THEN** its `troupe perform lead` prints `run <id> succeeded` and exits 0
+- **THEN** its `troupe perform lead` prints `run <id> succeeded` and exits 4, waiting at a gate for `director`
 
 ### Requirement: The first run explains the notice for uncommitted changes
 The first-run walkthrough SHALL say that a run works from the latest commit, and show the `workspace.uncommitted-unseen`
@@ -301,3 +305,19 @@ one troupe has. The docs check SHALL fail otherwise, naming the page, the line a
 #### Scenario: An engine reached through another runner
 - **WHEN** a page defines a runtime for LM Studio and points an actor on the `anthropic` runner at it
 - **THEN** the docs check passes
+
+### Requirement: The first run answers its gate and says how to drop the wait
+The first-run walkthrough SHALL have the reader see the run's diff and answer its gate with `troupe approve`, saying
+`troupe reject` throws the work away. It SHALL then say that an actor with no approvers set keeps clean work without
+waiting, and how to drop the wait: unset `actors.lead.approvers`. Its commands SHALL run as written in the docs check.
+
+#### Scenario: The walkthrough approves
+- **WHEN** a reader reads the first-run walkthrough's section on keeping the run's work
+- **THEN** it gives `troupe diff <run>` and `troupe approve <run>`, names `troupe reject <run>`, and doesn't give
+  `troupe accept`
+
+#### Scenario: Dropping the wait runs as written
+- **WHEN** the docs check runs the walkthrough's command to drop the wait, then performs `lead` again with a direction
+  whose changes apply cleanly
+- **THEN** the command exits 0, and the second `troupe perform lead` keeps its changes, approved by `troupe`, and
+  exits 0

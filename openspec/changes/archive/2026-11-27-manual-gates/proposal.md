@@ -38,19 +38,20 @@ with the owner's decisions 1 to 9 recorded on the issue.
 
 ### New Capabilities
 
-- `gates`: the gate at the end of a worktree run. Covers the approvers list and its rules, the built-in `troupe` and
-  `director` roles, passing to the next role, the cue and its brief, and answering it with approve or reject.
+- `gates`: the gate at the end of a worktree run. Covers the built-in `troupe` and `director` roles, passing to the
+  next role, the cue and its brief, and answering it with approve or reject. It also covers how a run records its
+  approvers, how its summary, `status` and `logs` show the gate, and the `approve` and `reject` commands. They live
+  here rather than in `runs` and `cli`, which are near the spec size limit.
 
 ### Modified Capabilities
 
-- `config`: the actor gains `approvers`, checked when set or swept. Every audition's actor sets `[director]`.
+- `config`: the actor gains `approvers`, checked when set, swept or merged. Every audition's actor sets
+  `[director]`.
 - `run-workspaces`: accept and discard are refused while a cue is open. A worktree is kept until its work is kept,
   approved, rejected or discarded, and the run's changes state covers waiting at a gate.
-- `runs`: a run's start records its approvers and their source. The run summary and logs show the gate's steps, and
-  status lists open cues.
 - `lineage`: the actor kind `system`, and approvals filled in by gates.
-- `cli`: `troupe approve` and `troupe reject`. `perform`'s exit code and end-of-run output reflect the gate. Init's
-  audition sets approvers.
+- `cli`: `perform`'s exit code and end-of-run output reflect the gate, and init's perform step waits for the
+  person.
 - `user-docs`: the first-run walkthrough approves instead of accepting, and the glossary defines approver.
 
 ## Impact
