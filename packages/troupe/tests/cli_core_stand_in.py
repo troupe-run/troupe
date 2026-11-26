@@ -14,6 +14,7 @@ signal would, without sending one (design D3).
 import asyncio
 import functools
 import io
+import logging
 import signal
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -54,11 +55,13 @@ class Reply:
 
 @dataclass(frozen=True)
 class Ran:
-    """What a command did: its exit code and what it printed on each stream."""
+    """What a command did: its exit code, what it printed on each stream, and what asyncio logged
+    while it ran (an error in a callback, which a person sees on their terminal)."""
 
     code: ExitCode
     stdout: str
     stderr: str
+    logged: tuple[str, ...] = ()
 
     @property
     def out(self) -> list[str]:
@@ -83,12 +86,15 @@ class StandIn:
     def run(self, *argv: str) -> Ran:
         stdout, stderr = io.StringIO(), io.StringIO()
         handlers = {each: signal.getsignal(each) for each in INTERRUPTS}
+        logged = _Logged()
+        logging.getLogger("asyncio").addHandler(logged)
         try:
             code = main(list(argv), stdout=stdout, stderr=stderr)
         finally:  # however the command's code is changed, Ctrl-C works after it as before
+            logging.getLogger("asyncio").removeHandler(logged)
             for each, handler in handlers.items():
                 signal.signal(each, handler)
-        return Ran(code, stdout.getvalue(), stderr.getvalue())
+        return Ran(code, stdout.getvalue(), stderr.getvalue(), tuple(logged.messages))
 
     @property
     def requests(self) -> list[tuple[str, dict[str, Any]]]:
@@ -115,6 +121,17 @@ class StandIn:
             return dispatch.Method(real[name].request, handler)
 
         return {name: method(name) for name in real}
+
+
+class _Logged(logging.Handler):
+    """The messages logged to it."""
+
+    def __init__(self) -> None:
+        super().__init__(logging.WARNING)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.messages.append(record.getMessage())
 
 
 def press_ctrl_c() -> None:

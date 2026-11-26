@@ -370,6 +370,7 @@ def test_a_config_command_shows_notices_and_carries_on_through_ctrl_c(
     sent = NoticeUpdate.from_data({"kind": "notice", "notice": SENT})
     core.reply(method, _result(method), sent, presses=1)
     ran = core.run(*argv)
+    assert ran.logged == ()  # no error from the Ctrl-C handler
     assert ran.code == ExitCode.OK
     assert ran.err == [
         *(["troupe: Sent.", "  fix: Wait."] if shows_sent else []),
@@ -385,6 +386,7 @@ def test_ctrl_c_while_set_reads_the_actors_runner_doesnt_stop_it(core: StandIn) 
     core.reply("config-get", _got(value="anthropic"), presses=1)
     core.reply("config-set", ConfigSetResult.from_data({"entries": [], "files": [], "notices": []}))
     ran = core.run("config", "set", "actors.lead.options.maxTurns=7")
+    assert ran.logged == ()  # no error from the Ctrl-C handler
     assert ran.code == ExitCode.OK
     assert core.requests[-1] == (
         "config-set",

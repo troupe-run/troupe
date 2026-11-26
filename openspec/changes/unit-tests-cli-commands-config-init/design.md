@@ -46,7 +46,11 @@ never sends, as #522's tests did with the protocol's message classes.
 
 To test what a Ctrl-C during `perform` or `logs --follow` does, the stand-in handler calls the SIGINT handler
 `on_interrupt` installed (`signal.getsignal(signal.SIGINT)`) directly, once or twice, and then returns. That runs
-`interrupted` and `pressed` exactly as a signal would, without sending one. Sending SIGINT to the test process
+`interrupted` and `pressed` exactly as a signal would, without sending one. `pressed` runs as a loop callback, and
+asyncio logs an exception in a callback instead of raising it, so a broken `on_cancel` wouldn't fail the command: it
+would print "Exception in callback" on the person's terminal. The stand-in captures what asyncio logs while a command
+runs, and each Ctrl-C test asserts nothing was. Each run restores the interrupt handlers it found, so no change to
+the CLI's code can leave the test process without one. Sending SIGINT to the test process
 (`os.kill`) is left out: it would reach outside the call under test, and the orchestrator asks to be consulted before
 any mutation run of code that sends signals.
 
