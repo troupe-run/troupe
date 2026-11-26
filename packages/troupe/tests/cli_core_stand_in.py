@@ -99,6 +99,10 @@ class StandIn:
 
         def method(name: str) -> dispatch.Method:
             async def handler(request: Message, session: Session, send: dispatch.Send) -> Message:
+                # The core's handlers read the session's theatre and environment: a call without
+                # one fails, as it would there.
+                if not isinstance(session, Session):
+                    raise TypeError(f"{name} was called with {session!r}, not a Session")
                 self.calls.append(Call(name, request.to_data(), session))
                 reply = self.replies[name]
                 for update in reply.updates:
