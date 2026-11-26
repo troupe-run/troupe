@@ -12,7 +12,7 @@
   database is).
 - [x] 2.2 Run the config merge suites and the rename properties with more examples (`--hypothesis-profile` or a raised
   `max_examples` locally, not committed). Verify: all pass.
-- [ ] 2.3 Run a local mutation run on `troupe.core.config.entities` over unit tests only, and put the result in the PR.
+- [x] 2.3 Run a local mutation run on `troupe.core.config.entities` over unit tests only, and put the result in the PR.
   Verify: no surviving mutant in the changed lines, or each one explained.
 - [x] 2.4 `uv run scripts/check.py` passes.
 
