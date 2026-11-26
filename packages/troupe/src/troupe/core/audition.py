@@ -17,6 +17,7 @@ from typing import Any
 from troupe.core import interim
 from troupe.core.config.kinds import ACTORS
 from troupe.core.errors import TroupeError
+from troupe.core.gates import DIRECTOR
 
 ACTOR = "lead"
 """The example actor's name, whatever its runner (design D6)."""
@@ -198,6 +199,10 @@ def _scripted() -> dict[str, Any]:
     }
 
 
+AUDITION_APPROVERS = (DIRECTOR,)
+"""Every audition's actor waits at a gate for whoever runs troupe, so a first run still asks
+(decision 8; spec: config, "Every audition's actor waits for a person")."""
+
 AUDITIONS: Mapping[str, Callable[[], dict[str, Any]]] = {
     "anthropic": _anthropic,
     "claude-code": _claude_code,
@@ -222,4 +227,4 @@ def audition(runner: str | None) -> Audition:
             problem=f"troupe knows the runner {name!r} but has no audition for it.",
             fix="This is a bug in troupe: add the runner's audition to troupe.core.audition.",
         )
-    return Audition(name, build(), DIRECTION)
+    return Audition(name, {**build(), "approvers": list(AUDITION_APPROVERS)}, DIRECTION)

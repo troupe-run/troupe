@@ -141,7 +141,13 @@ class Actor(StrictModel):
     """
     workspace: Annotated[Literal["worktree", "theatre"] | None, Field(title="Workspace")] = None
     """
-    Where a run works. worktree, the default when absent: the run's own git worktree at HEAD, under .troupe/local/worktrees/, whose changes reach the theatre only through troupe accept. theatre: the theatre itself, so what the run writes lands among your files at once.
+    Where a run works. worktree, the default when absent: the run's own git worktree at HEAD, under .troupe/local/worktrees/, whose changes reach the theatre only when they're kept at its gate (see approvers) or accepted. theatre: the theatre itself, so what the run writes lands among your files at once.
+    """
+    approvers: Annotated[list[Literal["troupe", "director"]] | None, Field(title="Approvers")] = (
+        None
+    )
+    """
+    Who may let a worktree run's work through, in order: troupe keeps the changes by itself when they apply cleanly and passes otherwise; director, held by whoever runs troupe, gets a cue and answers it with troupe approve or troupe reject. Absent means troupe, then director. The list ends with director, troupe can come only first, and each role is named once. Not for an actor whose workspace is theatre.
     """
     onContextFull: Annotated[
         Literal["fail", "compact"] | None, Field(title="When the context fills")

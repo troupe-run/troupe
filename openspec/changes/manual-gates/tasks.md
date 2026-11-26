@@ -10,10 +10,10 @@
 ## 2. Config: approvers on the actor
 
 - [x] 2.1 Add `core/gates.py` with the role names, the default `[troupe, director]` and `approvers_problems`; unit-test each rule (unknown name, empty, duplicate, `troupe` not first, not ending in `director`, set with `workspace: theatre`), including a hypothesis test that every list it accepts ends in `director` and starts with at most one `troupe`
-- [ ] 2.2 Add `approvers` to `protocol/schemas/config/actor.schema.json` (with a description), regenerate the packaged schemas and `core/config/models.py`, and verify both `--check` tests pass
-- [ ] 2.3 Call `approvers_problems` from `core/config/kinds.py`'s actor check; verify with integration tests that `troupe config set` refuses each case with `config.invalid` naming the path, that a hand edit of `approvers: [troupe]` is refused by the sweep, and that `'actors.tester.approvers=["director"]'` is recorded
-- [ ] 2.4 Set `approvers: ["director"]` on every audition in `core/audition.py`; update the pinned audition dicts and file checks in `tests/integration/test_init.py` and `test_cli_init.py`, and verify `test_init_unit.py` still finds every audition valid
-- [ ] 2.5 Regenerate `docs/prompt-book/config-schema.md` (`uv run scripts/docs_reference.py`) and verify `test_user_docs_reference.py` passes
+- [x] 2.2 Add `approvers` to `protocol/schemas/config/actor.schema.json` (with a description), regenerate the packaged schemas and `core/config/models.py`, and verify both `--check` tests pass
+- [x] 2.3 Call `approvers_problems` from `core/config/kinds.py`'s actor check; verify with integration tests that `troupe config set` refuses each case with `config.invalid` naming the path, that a hand edit of `approvers: [troupe]` is refused by the sweep, and that `'actors.tester.approvers=["director"]'` is recorded
+- [x] 2.4 Set `approvers: ["director"]` on every audition in `core/audition.py`; update the pinned audition dicts and file checks in `tests/integration/test_init.py` and `test_cli_init.py`, and verify `test_init_unit.py` still finds every audition valid
+- [x] 2.5 Regenerate `docs/prompt-book/config-schema.md` (`uv run scripts/docs_reference.py`) and verify `test_user_docs_reference.py` passes
 
 ## 3. Runs: recording approvers and the gate's events
 

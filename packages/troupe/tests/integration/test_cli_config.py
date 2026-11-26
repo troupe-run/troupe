@@ -82,7 +82,8 @@ def test_an_actors_file_holds_every_field_config_sets_in_the_schemas_order(repo:
     # Every field of the actor schema: a field added to the schema and not to the file fails here
     # (spec: config-files, "Each actor is projected to its own files").
     code, _, err = _tester(
-        "actors.tester.workspace=theatre",
+        "actors.tester.workspace=worktree",
+        'actors.tester.approvers=["director"]',
         "actors.tester.onContextFull=compact",
         "actors.tester.runtime=ollama",
         "actors.tester.model=llama3.2",
@@ -93,7 +94,8 @@ def test_an_actors_file_holds_every_field_config_sets_in_the_schemas_order(repo:
     schema = json.loads((SCHEMAS / "config" / "actor.schema.json").read_text(encoding="utf-8"))
     assert list(data) == list(schema["properties"])
     assert data["effects"] == {"write": ["out/**"]}
-    assert data["workspace"] == "theatre"
+    assert data["workspace"] == "worktree"
+    assert data["approvers"] == ["director"]
     assert data["onContextFull"] == "compact"
     assert data["runtime"] == "ollama"
     assert data["model"] == "llama3.2"

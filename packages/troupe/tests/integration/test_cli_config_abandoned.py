@@ -45,7 +45,7 @@ def _untracked_events(repo: Repo) -> list[str]:
 def _abandon(repo: Repo) -> str:
     """Edit the lead's file, sync, restore it and sync: the change id the notice names."""
     path = repo.path / LEAD_YAML
-    path.write_text(path.read_text("utf-8") + "workspace: theatre\n", encoding="utf-8")
+    path.write_text(path.read_text("utf-8") + "onContextFull: compact\n", encoding="utf-8")
     code, _, err = cli("sync")
     assert code == ExitCode.OK, err
     repo.git("restore", LEAD_YAML)
