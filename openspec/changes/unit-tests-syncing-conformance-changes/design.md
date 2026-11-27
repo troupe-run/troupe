@@ -59,7 +59,7 @@ process starts and no signal is sent; the kinds detector fails the test if one d
 ### D4. Tests by module, one commit each
 
 Order: syncing (#527), conformance (#528), changes (#529), as the issue asks. Each module's tests are new files
-(`test_config_syncing_unit.py`, `test_runner_conformance_unit.py`, `test_run_changes_unit.py`, split further if a
+(`test_config_syncing_unit.py`, `test_runner_conformance_unit.py`, `test_run_settling_unit.py`, split further if a
 file nears the size gate's warning). What two files share goes in a helper beside the suites, as the kinds detector
 asks.
 
