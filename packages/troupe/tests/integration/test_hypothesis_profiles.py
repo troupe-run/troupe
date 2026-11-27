@@ -96,3 +96,108 @@ def test_without_the_plugin_the_same_example_fails_on_hypothesiss_deadline(tmp_p
     completed = run_slow(tmp_path, bare)
     assert completed.returncode == 1
     assert "DeadlineExceeded" in completed.stdout
+
+
+FOUND = """\
+import os
+from hypothesis import Phase, given, settings, strategies as st
+
+REPLAY = [Phase.reuse] if os.environ.get("REPLAY_ONLY") else list(Phase)
+
+@settings(phases=REPLAY)
+@given(st.integers())
+def test_found(number):
+    assert number < 1000
+"""
+"""A property that fails for a value hypothesis finds at once. Told to replay only, it runs just the
+examples saved in the database, so it fails only if the earlier run's failure is there."""
+
+
+def fake_repository(tmp_path: Path) -> Path:
+    """A repository laid out like this one: the profiles plugin at its place in
+    packages/troupe/tests, loaded by the root's configuration, and the property beside it."""
+    repo = tmp_path / "repo"
+    tests = repo / "packages" / "troupe" / "tests"
+    tests.mkdir(parents=True)
+    (tests / "hypothesis_profiles.py").write_bytes(
+        (TESTS_ROOT / "hypothesis_profiles.py").read_bytes()
+    )
+    (tests / "test_found.py").write_text(FOUND, encoding="utf-8")
+    (repo / "pytest.ini").write_text(
+        "[pytest]\npythonpath = packages/troupe/tests\naddopts = -p hypothesis_profiles\n",
+        encoding="utf-8",
+    )
+    return repo
+
+
+def run_found(
+    repo: Path, cwd: Path, *, replay_only: bool, storage: Path | None = None
+) -> subprocess.CompletedProcess[str]:
+    """The property, run by pytest started in ``cwd``, as a developer or ``scripts/check.py``
+    starts it."""
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in {"HYPOTHESIS_STORAGE_DIRECTORY", "CI", "REPLAY_ONLY"}
+    }
+    if replay_only:
+        env["REPLAY_ONLY"] = "1"
+    if storage is not None:
+        env["HYPOTHESIS_STORAGE_DIRECTORY"] = str(storage)
+    return subprocess.run(
+        [
+            *[sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"],
+            *["--rootdir", str(repo), "-c", str(repo / "pytest.ini"), "--confcutdir", str(repo)],
+            *[
+                "--hypothesis-profile=default",
+                str(repo / "packages" / "troupe" / "tests" / "test_found.py"),
+            ],
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+        cwd=cwd,
+        env=env,
+    )
+
+
+def replayed_the_failure(completed: subprocess.CompletedProcess[str]) -> bool:
+    """Whether a replay-only run failed on the saved example, not on anything else."""
+    return completed.returncode == 1 and "number=1000" in completed.stdout
+
+
+def test_a_failure_saved_from_a_package_directory_fails_a_run_from_the_root(tmp_path: Path) -> None:
+    # #537: the full check runs from the root, and missed a failure found from packages/troupe
+    # (#532).
+    repo = fake_repository(tmp_path)
+    found = run_found(repo, repo / "packages" / "troupe", replay_only=False)
+    assert found.returncode == 1, found.stdout + found.stderr
+    replayed = run_found(repo, repo, replay_only=True)
+    assert replayed_the_failure(replayed), (
+        "the root's run didn't replay the saved failure:\n" + replayed.stdout
+    )
+
+
+def test_a_failure_saved_from_the_root_fails_a_run_from_a_package_directory(tmp_path: Path) -> None:
+    repo = fake_repository(tmp_path)
+    found = run_found(repo, repo, replay_only=False)
+    assert found.returncode == 1, found.stdout + found.stderr
+    replayed = run_found(repo, repo / "packages" / "troupe", replay_only=True)
+    assert replayed_the_failure(replayed), (
+        "the package's run didn't replay the saved failure:\n" + replayed.stdout
+    )
+
+
+def test_a_storage_directory_from_the_environment_keeps_the_examples_out_of_the_repository(
+    tmp_path: Path,
+) -> None:
+    # The flake hunt gives each round a private database this way (spec: flake-hunt).
+    repo = fake_repository(tmp_path)
+    private = tmp_path / "private"
+    found = run_found(repo, repo / "packages" / "troupe", replay_only=False, storage=private)
+    assert found.returncode == 1, found.stdout + found.stderr
+    assert any((private / "examples").iterdir())
+    assert not (repo / ".hypothesis").exists()
+    assert not (repo / "packages" / "troupe" / ".hypothesis").exists()
+    assert replayed_the_failure(run_found(repo, repo, replay_only=True, storage=private))
