@@ -18,8 +18,10 @@
   check passing against a runner that keeps the contract, each failing with its problem against one that breaks it,
   a timeout, an `OSError`, the whole run's outcome, and the credential masked. Verify they pass, start nothing and
   send no signal (the kinds detector passes them); commit. 33 tests, every line and branch of conformance.py run
-- [ ] 2.2 Measure conformance's score off the host (design D5): in a throwaway container, or from CI's mutation
-  report or the next nightly run. Record it
+- [x] 2.2 Measure conformance's score off the host (design D5): in a throwaway container, or from CI's mutation
+  report or the next nightly run. Record it. Measured 2026-11-27 in a throwaway `python:3.12-bookworm` container
+  (only the clone mounted, unit tests only, 1 child, the 2048 MB memory cap on): 404 of 415 caught (97.3%), before
+  the test of the cancel's run id and the check of each verdict's type (aimed at 3 of the 11 left, not measured)
 
 ## 3. troupe.core.runs.changes (#529)
 
@@ -34,9 +36,13 @@
 
 ## 4. Checks
 
-- [ ] 4.1 `uv run scripts/check.py` passes before each commit
-- [ ] 4.2 With the slot granted, run syncing's and changes' mutmut once more on every test of this change; record
-  each score and the survivors left, with why each is equivalent or out of reach, here and in the PR
+- [x] 4.1 `uv run scripts/check.py` passes before each commit
+- [x] 4.2 With the slot granted, run syncing's and changes' mutmut once more on every test of this change; record
+  each score and the survivors left, with why each is equivalent or out of reach, here and in the PR. Measured
+  2026-11-27 (1 child, the cap nulled in the clone only): `troupe.core.config.syncing` 781 of 886 caught (88.1%),
+  and 787 (88.8%) with the six mutants the last syncing asserts kill, each checked through mutmut's trampoline;
+  `troupe.core.runs.changes` 595 of 609 (97.7%), and 596 (97.9%) with the conflict naming two files. The survivors
+  left, and why, are in the PR's body
 
 ## Workflow follow-up
 

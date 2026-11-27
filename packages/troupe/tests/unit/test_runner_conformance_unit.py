@@ -284,6 +284,7 @@ def _check(
 
 
 def _problems(results: list[CheckResult]) -> dict[str, str | None]:
+    assert all(r.passed is True or r.passed is False for r in results)
     return {r.name: r.problem for r in results if not r.passed}
 
 
@@ -578,3 +579,11 @@ def test_the_credential_is_masked_in_every_problem(stage: Stage) -> None:
 def test_without_a_credential_nothing_is_masked(stage: Stage) -> None:
     problems = _problems(_check(stage, Runner(refuse_initialize=f"key {SECRET}")))
     assert problems["handshake"] == f"it refused initialize: key {SECRET}"
+
+
+def test_cancel_names_the_run_the_runner_started(stage: Stage) -> None:
+    _check(stage)
+    cancelling = stage.children[6]
+    (start,) = cancelling.starts()
+    (cancel,) = [m["params"] for m in cancelling.requests if m["method"] == "run/cancel"]
+    assert cancel == {"runId": start["runId"]}

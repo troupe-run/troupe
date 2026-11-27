@@ -400,6 +400,7 @@ def test_config_gets_sync_records_a_hand_edit_and_writes_no_file(theatre: Path) 
     synced = _sync(theatre, query=True)
     *_, edit = _events(theatre)
     assert synced.sweep_change == _change_of(edit)
+    assert [e.path for e in synced.edits] == [MD]
     assert synced.actions == ()
     assert [n.code for n in synced.notices] == [
         "config.hand-edit-recorded",
