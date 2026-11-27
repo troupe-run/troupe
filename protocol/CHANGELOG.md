@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.0](https://github.com/troupe-run/troupe/compare/protocol-v0.3.0...protocol-v0.4.0) (2026-11-27)
+
+
+### Features
+
+* **config:** give actors approvers, and every audition director ([795a2cb](https://github.com/troupe-run/troupe/commit/795a2cba9d8475da1705e222b20785710a241a7d))
+* **lineage:** add the system actor and the approvers' rules ([50f56d8](https://github.com/troupe-run/troupe/commit/50f56d8a2dc82ed077ec5753b21b703e6695b8ea))
+* **runs:** gate a worktree run's work, with approve and reject ([5b4a12e](https://github.com/troupe-run/troupe/commit/5b4a12e99fb318f84a4ed3913f7e6f5e0310c1e6))
+
 ## [0.3.0](https://github.com/troupe-run/troupe/compare/protocol-v0.2.0...protocol-v0.3.0) (2026-11-24)
 
 
