@@ -14,10 +14,10 @@
 
 ## 2. troupe.core.runners.conformance (#528)
 
-- [ ] 2.1 Add unit tests for `check_runner` with stand-ins for `processes.start` and `run_actor` (design D3): every
+- [x] 2.1 Add unit tests for `check_runner` with stand-ins for `processes.start` and `run_actor` (design D3): every
   check passing against a runner that keeps the contract, each failing with its problem against one that breaks it,
   a timeout, an `OSError`, the whole run's outcome, and the credential masked. Verify they pass, start nothing and
-  send no signal (the kinds detector passes them); commit
+  send no signal (the kinds detector passes them); commit. 33 tests, every line and branch of conformance.py run
 - [ ] 2.2 Measure conformance's score off the host (design D5): in a throwaway container, or from CI's mutation
   report or the next nightly run. Record it
 
