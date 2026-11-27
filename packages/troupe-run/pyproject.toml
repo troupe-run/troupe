@@ -11,7 +11,7 @@ requires-python = ">=3.12,<3.16"
 # from that commit, since the root's workspace sources win (install-with-uv design D1); installing a troupe-run tag
 # with --no-sources installs each from its pin (design D3). scripts/bundle.py fails the check when one is missing.
 dependencies = [
-    "troupe @ git+https://github.com/troupe-run/troupe@troupe-v0.3.0#subdirectory=packages/troupe",
+    "troupe @ git+https://github.com/troupe-run/troupe@troupe-v0.4.0#subdirectory=packages/troupe",
     "troupe-artifacts-local @ git+https://github.com/troupe-run/troupe@troupe-artifacts-local-v0.1.0#subdirectory=packages/troupe-artifacts-local",
     "troupe-identity-local @ git+https://github.com/troupe-run/troupe@troupe-identity-local-v0.1.0#subdirectory=packages/troupe-identity-local",
     "troupe-plugin-sdk @ git+https://github.com/troupe-run/troupe@troupe-plugin-sdk-v0.2.0#subdirectory=packages/troupe-plugin-sdk",
