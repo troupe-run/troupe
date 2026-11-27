@@ -206,13 +206,21 @@ def link_checkout_entries(checkout: Path, unit: ms.Unit, made: list[Path]) -> No
             made.append(link)
 
 
+def mutmut_tests(workdir: Path, checkout: Path, unit: ms.Unit) -> str:
+    """The unit's tests as mutmut names them from its working directory, which is how its node
+    ids begin: linked under `src` for a root unit, else the path from the working directory."""
+    if workdir == checkout:
+        return "src/" + os.path.relpath(checkout / unit.tests, checkout / unit.source)
+    return os.path.relpath(checkout / unit.tests, workdir)
+
+
 def mutmut_config(workdir: Path, checkout: Path, unit: ms.Unit, *, children: int) -> str:
     """mutmut's setup.cfg for a unit, with paths from its working directory."""
 
     def local(path: str) -> str:
         return os.path.relpath(checkout / path, workdir)
 
-    tests = local(unit.tests)
+    tests = mutmut_tests(workdir, checkout, unit)
     also_copy = [local(path) for path in unit.also_copy] + [
         f"{PLUGIN_COPY}.py",
         f"{PLUGIN_COPY}.json",
@@ -222,7 +230,6 @@ def mutmut_config(workdir: Path, checkout: Path, unit: ms.Unit, *, children: int
         # The source is linked as src, and its tests with it: they're run, never mutated. Every
         # other top-level entry is copied beside it, since the tests find the repository's files
         # from their own place (a hand-kept list missed .tflint.hcl in the trial).
-        tests = "src/" + os.path.relpath(checkout / unit.tests, checkout / unit.source)
         do_not_mutate.append(f"{tests}/*")
         # The source's own name is linked to the mutated copy instead (run_mutmut): an unmutated
         # copy under it would shadow the mutants for code that imports through it, as check.py does.
@@ -414,6 +421,38 @@ class StateRun:
     records: list[st.UnitState] = field(default_factory=list)
 
 
+def retest_for_tests(
+    record: st.UnitState,
+    command: list[str],
+    workdir: Path,
+    deadline: float,
+    run: Run,
+    code: int,
+    *,
+    unreached: bool,
+) -> int:
+    """After mutmut's run: results carried from before it that a test new to mutmut now reaches
+    are cleared, since mutmut never re-tests them on its own, and mutmut runs once more for them
+    if it exited cleanly with budget left (#418, design D4). mutmut's final exit code."""
+    if unreached:
+        record.settle(completed=True)
+        return code
+    cleared, progressed = st.clear_gained(workdir / "mutants", record)
+    record.settle(completed=code == 0 or progressed)
+    if not cleared:
+        return code
+    if code != 0 or time.monotonic() >= deadline:
+        record.left_for_next_run = cleared
+        return code
+    print(
+        f"mutation_run: {record.name}: {cleared} kept results reached by changed or new tests "
+        "were cleared; running mutmut again for them",
+        flush=True,
+    )
+    record.retested = True
+    return run(command, workdir, deadline - time.monotonic())
+
+
 def run_mutmut(
     checkout: Path,
     unit: ms.Unit,
@@ -483,11 +522,16 @@ def run_mutmut(
                 full_refresh_days=state.full_refresh_days,
                 full_refresh=state.full_refresh,
                 previously_saved=unit.name in state.previously_saved,
+                tests=checkout / unit.tests,
+                local_tests=mutmut_tests(workdir, checkout, unit),
             )
         mutmut = mutmut_bin()
         tail: list[str] = []
         code = run([mutmut, "run", *names], workdir, deadline - time.monotonic(), tail=tail)
         unreached = none_reached(code, tail)
+        if record is not None:
+            code = retest_for_tests(record, [mutmut, "run", *names], workdir, deadline, run, code,
+                                    unreached=unreached)  # fmt: skip
         if unreached:
             # Every mutant is reached by no test: a report of that, judged, and the run goes on to
             # the next unit (#399, owner decision A).
@@ -802,6 +846,10 @@ def harvest(repository: str, checkout: Path, state: Path, record_path: Path) -> 
             age = settings.full_refresh_days + 1
         refresh = os.environ.get("MUTATION_FULL_REFRESH") == "true"
         record.filled_since = None if refresh or age > settings.full_refresh_days else since
+        # The run didn't get to say which results stand for the checkout's tests: keep the
+        # fingerprint they were saved against, so the next run looks at the same changes (#418).
+        printed = manifest.get("units", {}).get(unit.name, {}).get("tests_fingerprint")
+        record.tests_fingerprint = printed if isinstance(printed, dict) else None
         st.save(
             state,
             unit,
