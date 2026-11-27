@@ -17,7 +17,7 @@
 - [x] 2.1 Add unit tests for `check_runner` with stand-ins for `processes.start` and `run_actor` (design D3): every
   check passing against a runner that keeps the contract, each failing with its problem against one that breaks it,
   a timeout, an `OSError`, the whole run's outcome, and the credential masked. Verify they pass, start nothing and
-  send no signal (the kinds detector passes them); commit. 33 tests, every line and branch of conformance.py run
+  send no signal (the kinds detector passes them); commit. 34 tests, every line and branch of conformance.py run
 - [x] 2.2 Measure conformance's score off the host (design D5): in a throwaway container, or from CI's mutation
   report or the next nightly run. Record it. Measured 2026-11-27 in a throwaway `python:3.12-bookworm` container
   (only the clone mounted, unit tests only, 1 child, the 2048 MB memory cap on): 404 of 415 caught (97.3%), before
