@@ -280,6 +280,7 @@ def test_a_rehearsed_hand_edit_would_be_recorded(theatre: Path) -> None:
     _append(theatre, "workspace: theatre")
     synced = _sync(theatre, rehearse=True)
     assert len(_events(theatre)) == 1
+    assert [e.path for e in synced.edits] == [YAML]
     assert synced.sweep_change is None
     assert synced.merged.config["actors"]["tester"]["workspace"] == "theatre"
     (notice,) = synced.notices
@@ -412,6 +413,7 @@ def test_config_gets_sync_with_no_edit_records_nothing(theatre: Path) -> None:
     _tester(theatre)
     synced = _sync(theatre, query=True)
     assert len(_events(theatre)) == 1
+    assert synced.merged == read(_store(theatre))
     assert synced.edits == ()
     assert synced.sweep_change is None
     assert synced.notices == []
@@ -422,6 +424,7 @@ def test_config_gets_rehearsed_sync_would_record(theatre: Path) -> None:
     _append(theatre, "workspace: theatre")
     synced = _sync(theatre, query=True, rehearse=True)
     assert len(_events(theatre)) == 1
+    assert [e.path for e in synced.edits] == [YAML]
     assert synced.sweep_change is None
     assert synced.merged.config["actors"]["tester"]["workspace"] == "theatre"
     assert [n.details.get("rehearsal") for n in synced.notices] == [True]
