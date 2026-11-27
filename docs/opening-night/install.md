@@ -18,7 +18,7 @@ Then install troupe:
 
 <!-- x-release-please-start-version -->
 ```sh
-uv tool install --no-sources "git+https://github.com/troupe-run/troupe@troupe-run-v0.3.0#subdirectory=packages/troupe-run"
+uv tool install --no-sources "git+https://github.com/troupe-run/troupe@troupe-run-v0.4.0#subdirectory=packages/troupe-run"
 ```
 <!-- x-release-please-end -->
 
@@ -42,7 +42,7 @@ add a runner that comes as an extra, give its name in brackets, or `all` for eve
 
 <!-- x-release-please-start-version -->
 ```sh
-uv tool install --no-sources "troupe-run[all] @ git+https://github.com/troupe-run/troupe@troupe-run-v0.3.0#subdirectory=packages/troupe-run"
+uv tool install --no-sources "troupe-run[all] @ git+https://github.com/troupe-run/troupe@troupe-run-v0.4.0#subdirectory=packages/troupe-run"
 ```
 <!-- x-release-please-end -->
 

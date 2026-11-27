@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/troupe-run/troupe/compare/troupe-run-v0.3.0...troupe-run-v0.4.0) (2026-11-27)
+
+
+### Features
+
+* **bundle:** ship troupe 0.4.0 ([afbf970](https://github.com/troupe-run/troupe/commit/afbf970615b85f00c5472d15b5d744022a5fb11a))
+
 ## [0.3.0](https://github.com/troupe-run/troupe/compare/troupe-run-v0.2.0...troupe-run-v0.3.0) (2026-11-24)
 
 
