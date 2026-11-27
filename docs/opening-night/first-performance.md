@@ -98,7 +98,10 @@ While it runs, troupe shows its progress on standard error. When it succeeds, st
 The run worked in its own git worktree, under `.troupe/local/worktrees/`, so your files haven't changed yet:
 `NOTES.md` is in the worktree, not beside your files. That's a worktree's whole point: you see what an actor did
 before any of it is yours. The example actor's work then waits at a [gate](../the-company/gates-and-decisions.md)
-for you, so `troupe perform` says the run waits for `director`, the role you hold, and exits 4 rather than 0.
+for you, so `troupe perform` says the run succeeded and waits for `director`, the role you hold, and exits 4
+rather than 0. Exit 4 isn't a failure: it means the run succeeded and its work is waiting for you. A shell or a
+script reads any exit but 0 as an error, so check for 4 when you script `troupe perform`. The [exit
+codes](../prompt-book/cli.md#exit-codes) list every code.
 
 ## Changes the run won't see
 

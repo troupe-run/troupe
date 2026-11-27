@@ -15,11 +15,11 @@
 
 ## 3. Walkthrough
 
-- [ ] 3.1 Rewrite the exit-4 sentence in `docs/opening-night/first-performance.md` (D3), and check
+- [x] 3.1 Rewrite the exit-4 sentence in `docs/opening-night/first-performance.md` (D3), and check
   `docs/the-company/gates-and-decisions.md` and `docs/prompt-book/cli.md` agree.
-- [ ] 3.2 Add a docs unit test: the walkthrough says exit 4 means the run succeeded and waits, not failure, and the
+- [x] 3.2 Add a docs unit test: the walkthrough says exit 4 means the run succeeded and waits, not failure, and the
   exit-code table gives 4 as `WAITING`. Verify: it fails on the old page.
 
 ## 4. Check
 
-- [ ] 4.1 `uv run scripts/check.py` passes. `openspec validate changelog-size-and-waiting-exit --strict` passes.
+- [x] 4.1 `uv run scripts/check.py` passes. `openspec validate changelog-size-and-waiting-exit --strict` passes.

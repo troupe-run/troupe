@@ -37,7 +37,7 @@ A gate that reaches `director` raises a **cue**: an open request to a role, with
 how it ended, what it changed, and why it came to you, such as the files that conflict. ("Cue" is a provisional
 name.)
 
-- `troupe perform` says the run waits, and exits 4.
+- `troupe perform` says the run succeeded and its work waits, and exits 4: waiting, not failure.
 - `troupe status` lists every open cue above the runs.
 - `troupe diff <run>` shows the changes. `troupe approve <run>` keeps them, and `troupe reject <run>` throws them
   away. Both take `--reason` and `--rehearse`. While a cue is open, `troupe accept` and `troupe discard` are refused,
