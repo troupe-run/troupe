@@ -151,10 +151,13 @@ def _settle_hint(run: dict[str, Any]) -> str | None:
             if passed is not None
             else ""
         )
+        # Only a run that succeeded reaches a gate (gate.reaches_gate), so a waiting one did
+        # (changelog-size-and-waiting-exit design D2).
         return (
-            f"troupe: run {short} waits at its gate for {role}{because}. Its changes are in its "
-            f"worktree, {where}. See them with `troupe diff {short}`, then `troupe approve "
-            f"{short}` or `troupe reject {short}`."
+            f"troupe: run {short} succeeded, and its work waits at its gate for {role}{because}: "
+            f"exit 4 means waiting for {role}, not failure. Its changes are in its worktree, "
+            f"{where}. See them with `troupe diff {short}`, then `troupe approve {short}` or "
+            f"`troupe reject {short}`."
         )
     if changes["state"] == "pending":
         return (
