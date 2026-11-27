@@ -6,11 +6,11 @@
 
 ## 2. Perform's waiting message
 
-- [ ] 2.1 Change `_settle_hint`'s waiting branch to D2's text. Update the two unit tests in
+- [x] 2.1 Change `_settle_hint`'s waiting branch to D2's text. Update the two unit tests in
   `packages/troupe/tests/unit/test_cli_perform_unit.py`, so the exact string covers the conflict case and the no-conflict case
   checks "succeeded", the role and "exit 4 means waiting for director, not failure". Verify: the tests fail on the old
   text and pass on the new.
-- [ ] 2.2 Verify: the integration tests that match "waits at its gate for director" still pass
+- [x] 2.2 Verify: the integration tests that match "waits at its gate for director" still pass
   (`test_cli_init.py`, `test_user_docs_pages_integration.py`).
 
 ## 3. Walkthrough

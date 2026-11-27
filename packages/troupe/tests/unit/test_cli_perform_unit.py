@@ -376,7 +376,7 @@ def test_a_run_kept_at_its_gate_names_the_files_and_who_approved_and_exits_0(
     )
 
 
-def test_a_run_waiting_after_a_conflict_names_the_role_the_files_and_answers_and_exits_4(
+def test_a_run_waiting_after_a_conflict_says_it_succeeded_names_the_role_files_answers_exit_4(
     core: StandIn,
 ) -> None:
     waiting = {**PENDING, "state": "waiting", "cue": {"role": "director", "raisedAt": AT}}
@@ -396,20 +396,27 @@ def test_a_run_waiting_after_a_conflict_names_the_role_the_files_and_answers_and
     assert int(ran.code) == 4
     assert ran.out == [f"run {RUN_ID} succeeded"]
     assert ran.err[-1] == (
-        f"troupe: run {SHORT} waits at its gate for director because src/a.txt conflicts with "
-        f"your files. Its changes are in its worktree, {WORKTREE}. See them with `troupe diff "
-        f"{SHORT}`, then `troupe approve {SHORT}` or `troupe reject {SHORT}`."
+        f"troupe: run {SHORT} succeeded, and its work waits at its gate for director because "
+        "src/a.txt conflicts with your files: exit 4 means waiting for director, not failure. "
+        f"Its changes are in its worktree, {WORKTREE}. See them with `troupe diff {SHORT}`, then "
+        f"`troupe approve {SHORT}` or `troupe reject {SHORT}`."
     )
 
 
-def test_a_run_waiting_for_a_person_first_names_no_conflict_and_exits_4(core: StandIn) -> None:
+def test_a_run_waiting_for_a_person_says_it_succeeded_and_exit_4_is_waiting_not_failure(
+    core: StandIn,
+) -> None:
     waiting = {**PENDING, "state": "waiting", "cue": {"role": "director", "raisedAt": AT}}
     gate = [{"step": "cue", "role": "director", "at": AT}]
     core.reply("perform", _run(changes=waiting, gate=gate), _started())
     ran = core.run("perform", "lead")
     assert ran.code == ExitCode.WAITING
-    assert ran.err[-1].startswith(f"troupe: run {SHORT} waits at its gate for director. ")
-    assert "troupe accept" not in ran.err[-1]
+    assert ran.err[-1] == (
+        f"troupe: run {SHORT} succeeded, and its work waits at its gate for director: exit 4 "
+        f"means waiting for director, not failure. Its changes are in its worktree, {WORKTREE}. "
+        f"See them with `troupe diff {SHORT}`, then `troupe approve {SHORT}` or "
+        f"`troupe reject {SHORT}`."
+    )
 
 
 def test_a_rehearsal_shows_the_approvers_it_would_use(core: StandIn) -> None:
