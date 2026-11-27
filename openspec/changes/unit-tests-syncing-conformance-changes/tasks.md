@@ -2,13 +2,15 @@
 
 ## 1. troupe.core.config.syncing (#527)
 
-- [ ] 1.1 Add unit tests for `sync_config` over a `files` theatre (design D1, D2): nothing to do, hand edits
+- [x] 1.1 Add unit tests for `sync_config` over a `files` theatre (design D1, D2): nothing to do, hand edits
   recorded (and a file removed), a command's own change, both, a rename and a rename already moved by hand,
   rehearsals, `config get`'s record-only sync, conflicts refused, resolved by a hand edit and left unrecorded, and
   each notice's text and details; and `file_notices`. Verify the files pass and the kinds detector passes them
-- [ ] 1.2 With the local mutation slot granted, run mutmut on the unit tests, scoped to `troupe.core.config.syncing`
+- [x] 1.2 With the local mutation slot granted, run mutmut on the unit tests, scoped to `troupe.core.config.syncing`
   (design D5). Verify it scores over 60%; kill what's worth killing; record the score and the survivors left, with
-  why; commit
+  why; commit. Measured 2026-11-27 (1 child, the memory cap nulled in the clone only): 770 of 886 caught (86.9%),
+  before the tests of the actor given, the lock, the sweep's change after a merge, a non-ASCII value, every file and
+  value an edit leaves, and force (aimed at about 40 of the 116 left; task 4.2 measures them)
 
 ## 2. troupe.core.runners.conformance (#528)
 
@@ -30,6 +32,8 @@
 ## 4. Checks
 
 - [ ] 4.1 `uv run scripts/check.py` passes before each commit
+- [ ] 4.2 With the slot granted, run syncing's and changes' mutmut once more on every test of this change; record
+  each score and the survivors left, with why each is equivalent or out of reach, here and in the PR
 
 ## Workflow follow-up
 
