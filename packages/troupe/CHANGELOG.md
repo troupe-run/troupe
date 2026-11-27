@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.4.0](https://github.com/troupe-run/troupe/compare/troupe-v0.3.0...troupe-v0.4.0) (2026-11-27)
+
+
+### Features
+
+* **config:** give actors approvers, and every audition director ([795a2cb](https://github.com/troupe-run/troupe/commit/795a2cba9d8475da1705e222b20785710a241a7d))
+* **lineage:** add the system actor and the approvers' rules ([50f56d8](https://github.com/troupe-run/troupe/commit/50f56d8a2dc82ed077ec5753b21b703e6695b8ea))
+* **runs:** gate a worktree run's work, with approve and reject ([5b4a12e](https://github.com/troupe-run/troupe/commit/5b4a12e99fb318f84a4ed3913f7e6f5e0310c1e6))
+
+
+### Bug Fixes
+
+* **cli:** say a waiting run succeeded and that exit 4 isn't failure ([412d6f2](https://github.com/troupe-run/troupe/commit/412d6f24307014068ac9f387106b825e31596ae6))
+* **config:** contest a fallen-back rename's history in every order ([d0ccd1b](https://github.com/troupe-run/troupe/commit/d0ccd1b5821307cadccf1cb09d8ce4daa42e2428)), closes [#532](https://github.com/troupe-run/troupe/issues/532)
+* **config:** name the event and line in merge's missing-parent error ([28decdd](https://github.com/troupe-run/troupe/commit/28decdd02232e4fe2169aefd57b4409b571b2405)), closes [#506](https://github.com/troupe-run/troupe/issues/506)
+
 ## [0.3.0](https://github.com/troupe-run/troupe/compare/troupe-v0.2.0...troupe-v0.3.0) (2026-11-24)
 
 
