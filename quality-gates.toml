@@ -89,12 +89,13 @@ exclude = [
 # The size in bytes of each file a change adds or changes (troupe-run/infrastructure#271): above block_above it may not
 # be new or larger than before, unless [size.allow] gives it its own ceiling; above warn_above it's noted. A review reads
 # every changed file whole, and one Read holds about 25,000 tokens. Limits set by the owner on 2026-11-19
-# (openspec/changes/archive/2026-11-20-size-gate/design.md, D1). Fixtures, archived changes and the lock file aren't
-# reviewed as code, so they aren't measured; binary files never are.
+# (openspec/changes/archive/2026-11-20-size-gate/design.md, D1). Fixtures, archived changes, the lock file and the
+# changelogs release-please writes aren't reviewed as code, so they aren't measured; binary files never are. Each
+# release makes a changelog larger, and the review skips release pull requests (#535, owner 2026-11-27).
 [size]
 block_above = 49152
 warn_above = 32768
-exclude = ["**/fixtures/**", "openspec/changes/archive/**", "uv.lock"]
+exclude = ["**/fixtures/**", "openspec/changes/archive/**", "uv.lock", "**/CHANGELOG.md"]
 
 # The files over block_above on 2026-11-20, each capped at its size then, rounded up to a whole KiB, plus 16 KiB
 # (design D2). Each has an issue to split it. Remove an entry once its file is under block_above: the check fails on an
