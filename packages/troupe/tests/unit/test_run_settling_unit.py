@@ -317,12 +317,12 @@ def test_a_rehearsed_accept_checks_the_diff_and_changes_nothing(theatre: Theatre
 
 def test_a_diff_that_doesnt_apply_is_refused_changing_nothing(theatre: Theatre) -> None:
     run = theatre.run()
-    theatre.git.failing = ("b.txt",)
+    theatre.git.failing = ("a.txt", "b.txt")
     error = _refusal(theatre, changes.accept, m.AcceptRequest(_ref(run)))
     assert error.code == "run.changes-conflict"
     assert error.problem == (
-        f"Run {run.run_id}'s diff doesn't apply cleanly to your working tree: b.txt changed since "
-        "the run started. Nothing was changed."
+        f"Run {run.run_id}'s diff doesn't apply cleanly to your working tree: a.txt, b.txt changed "
+        "since the run started. Nothing was changed."
     )
     assert error.fix == (
         f"See the diff with troupe diff {_ref(run)}, and the run's files in {_worktree(run)}. To "
@@ -332,7 +332,7 @@ def test_a_diff_that_doesnt_apply_is_refused_changing_nothing(theatre: Theatre) 
     assert error.details == {
         "run": run.run_id,
         "diff": theatre.artifacts.put(PATCH),
-        "files": ["b.txt"],
+        "files": ["a.txt", "b.txt"],
         "worktree": _worktree(run),
     }
     assert theatre.git.calls == [("check_apply", PATCH)]
