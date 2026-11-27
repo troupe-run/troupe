@@ -260,3 +260,14 @@ def test_the_first_run_says_clean_work_is_kept_without_asking_and_how_to_drop_th
     text = section(PAGE, "Keep clean work without asking")
     assert sh_lines(text) == ["troupe config unset actors.lead.approvers"]
     assert "troupe approves them itself" in text
+
+
+def test_the_first_run_says_exit_4_is_a_success_waiting_for_you_not_a_failure() -> None:
+    # spec: user-docs, "The first run says exit 4 is waiting, not failure".
+    text = " ".join(section(PAGE, "Perform").split())
+    plainly = "Exit 4 isn't a failure: it means the run succeeded and its work is waiting for you."
+    assert plainly in text
+    table = (DOCS / "prompt-book" / "cli.md").read_text(encoding="utf-8")
+    row = next(line for line in table.splitlines() if line.startswith("| 4 |"))
+    assert "`WAITING`" in row
+    assert "run succeeded" in row
