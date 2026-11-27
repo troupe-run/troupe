@@ -23,11 +23,14 @@
 
 ## 3. troupe.core.runs.changes (#529)
 
-- [ ] 3.1 Add unit tests for `diff`, `accept` and `discard` over a `files` theatre with recorded runs, a stand-in
+- [x] 3.1 Add unit tests for `diff`, `accept` and `discard` over a `files` theatre with recorded runs, a stand-in
   version control and an in-memory artifact store (design D1, D2): each refusal, UTF-8 and base64 diffs, a
   rehearsal, what accepting and discarding record, and the worktree-not-removed notice. Verify they pass
-- [ ] 3.2 With the local mutation slot granted, run mutmut on the unit tests, scoped to `troupe.core.runs.changes`.
-  Verify it scores over 60%; record the score and survivors; commit
+- [x] 3.2 With the local mutation slot granted, run mutmut on the unit tests, scoped to `troupe.core.runs.changes`.
+  Verify it scores over 60%; record the score and survivors; commit. Measured 2026-11-27 (1 child, the memory cap
+  nulled in the clone only): 576 of 609 caught (94.6%), before the tests of the stores each command opens for its
+  session, the settle lock's name and a second settling, a diff file already gone, a gate's keep, and a waiting
+  run applying nothing (aimed at about 15 of the 33 left; task 4.2 measures them)
 
 ## 4. Checks
 
