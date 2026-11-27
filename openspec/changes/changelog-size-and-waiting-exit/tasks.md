@@ -1,6 +1,6 @@
 ## 1. Size gate
 
-- [ ] 1.1 Add `**/CHANGELOG.md` to `[size] exclude` in `quality-gates.toml`, with the reason in its comment. Verify:
+- [x] 1.1 Add `**/CHANGELOG.md` to `[size] exclude` in `quality-gates.toml`, with the reason in its comment. Verify:
   a changelog grown past 49,152 bytes in a scratch commit passes `uv run scripts/check.py`'s size gate, and a
   Markdown file grown past it still fails (run `scripts/quality_gates.py size` against a base).
 
