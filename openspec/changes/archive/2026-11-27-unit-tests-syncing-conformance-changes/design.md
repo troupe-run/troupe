@@ -66,7 +66,7 @@ asks.
 ### D5. Measured locally for syncing and changes, not for conformance
 
 With the local mutation slot granted each time: mutmut 3.8.1 in a throwaway clone with this branch's tests, the
-unit tests only, scoped to one module, at most 2 children, `scripts/mutation.json`'s settings, with the clone's copy
+unit tests only, scoped to one module, 1 child (2 allowed when load is low), `scripts/mutation.json`'s settings, with the clone's copy
 setting `mutant_memory_mb` to null (macOS refuses `RLIMIT_AS`, which would count every mutant caught). The
 repository's copy is unchanged. `troupe.core.runs.changes` was checked through its imports before mutating: its own
 code starts nothing and sends no signal; the lease probe it can reach (`queries._holder_has_ended`, `kill(pid, 0)`)
