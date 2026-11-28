@@ -101,7 +101,7 @@
     },
     "rename": {
       "title": "Rename entry",
-      "description": "A whole actor or runtime renamed: path is the new name and renamedFrom the old, each [kind, name] of the same kind; before is the hash of the group it moves; there is no after.",
+      "description": "A whole actor, runtime or flow renamed: path is the new name and renamedFrom the old, each [kind, name] of the same kind; before is the hash of the group it moves; there is no after.",
       "type": "object",
       "additionalProperties": false,
       "required": [

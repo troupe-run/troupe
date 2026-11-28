@@ -21,7 +21,7 @@
     },
     "operation": {
       "title": "Operation",
-      "description": "Set the value or group at a path, unset it, or rename to it the whole actor or runtime at renamedFrom. Exactly one of value, unset and renamedFrom.",
+      "description": "Set the value or group at a path, unset it, or rename to it the whole actor, runtime or flow at renamedFrom. Exactly one of value, unset and renamedFrom.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -40,7 +40,7 @@
           "const": true
         },
         "renamedFrom": {
-          "description": "Rename the whole actor or runtime at this path, [kind, name], to the operation's path, [kind, new name] of the same kind (troupe config mv). Absent: a value is set or unset.",
+          "description": "Rename the whole actor, runtime or flow at this path, [kind, name], to the operation's path, [kind, new name] of the same kind (troupe config mv). Absent: a value is set or unset.",
           "$ref": "#/$defs/path"
         }
       },

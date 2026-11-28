@@ -329,7 +329,7 @@ class RenamedFromItem(RootModel[str]):
 
 class ConfigChangedRename(StrictModel):
     """
-    A whole actor or runtime renamed: path is the new name and renamedFrom the old, each [kind, name] of the same kind; before is the hash of the group it moves; there is no after.
+    A whole actor, runtime or flow renamed: path is the new name and renamedFrom the old, each [kind, name] of the same kind; before is the hash of the group it moves; there is no after.
     """
 
     model_config = ConfigDict(
