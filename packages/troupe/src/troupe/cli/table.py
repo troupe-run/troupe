@@ -182,7 +182,12 @@ def _run_reject(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -
 
 
 RUN_COMMANDS: tuple[Command, ...] = (
-    Command("perform", "Run one actor and record the run.", _configure_perform, _run_perform),
+    Command(
+        "perform",
+        "Run one actor and record the run, as a new performance.",
+        _configure_perform,
+        _run_perform,
+    ),
     Command(
         "status", "Show the most recent performances, or one run.", _configure_status, _run_status
     ),

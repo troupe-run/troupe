@@ -146,7 +146,7 @@ troupe init [--audition] [--runner <runner>] [--rehearse]
 
 ### `troupe perform`
 
-Run one actor and record the run.
+Run one actor and record the run, as a new performance.
 
 ```text
 troupe perform <actor> [--direction <direction>] [--rehearse]
