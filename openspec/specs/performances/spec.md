@@ -57,7 +57,7 @@ A performance's end SHALL be recorded once nothing more will happen in it, with 
 
 - `completed`: every step ran, and the work was kept or there was none.
 - `failed`: a step didn't succeed, or its changes couldn't be captured.
-- `rejected`: its work was rejected at a gate.
+- `rejected`: its work was turned down at a gate or discarded.
 - `cancelled`: a step was cancelled.
 
 A performance whose work waits at a gate, or whose `perform` stopped without an end, SHALL have no end.
@@ -178,3 +178,18 @@ performance and its step.
 #### Scenario: A run's summary names its performance
 - **WHEN** a person runs `troupe status <run>`
 - **THEN** the summary shows the run's performance and its step
+
+### Requirement: Settling a run ends a performance its perform left open
+When a person's `accept` or `discard` settles a run whose performance has no end, the performance SHALL end in the
+same batch: `completed` for an accept, `rejected` for a discard. This covers a perform that stopped after its run's
+end and before troupe's turn at the gate, or before the run's end. A performance that has ended SHALL record nothing
+more.
+
+#### Scenario: Accepting after perform stopped before troupe's turn
+- **WHEN** a run succeeds with changes, its perform stops before troupe's turn at the gate, and a person runs
+  `troupe accept <run>`
+- **THEN** the acceptance and the performance's end, `completed`, are recorded together
+
+#### Scenario: Discarding an interrupted run
+- **WHEN** a person runs `troupe discard <run>` for a run whose perform stopped without recording its end
+- **THEN** the discard and the performance's end, `rejected`, are recorded together

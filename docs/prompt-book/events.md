@@ -51,7 +51,7 @@ The payload of a performance's end (topic troupe.core.runs.performance:Performan
 |---|---|---|---|
 | `lineage` | object (Lineage) | Yes | Where the event came from. It names this performance. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
-| `outcome` | one of `"completed"`, `"failed"`, `"rejected"`, `"cancelled"` | Yes | How it ended: completed when every step ran and its work was kept or there was none, failed when a step didn't succeed or its changes couldn't be captured, rejected when its work was rejected at a gate, cancelled when a step was cancelled. |
+| `outcome` | one of `"completed"`, `"failed"`, `"rejected"`, `"cancelled"` | Yes | How it ended: completed when every step ran and its work was kept or there was none, failed when a step didn't succeed or its changes couldn't be captured, rejected when its work was turned down at a gate or discarded, cancelled when a step was cancelled. |
 
 ### Performance.Started
 

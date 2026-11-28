@@ -26,6 +26,7 @@ from troupe.core.identity import Identity
 from troupe.core.runs import changes
 from troupe.core.runs.aggregate import Run
 from troupe.core.runs.backends import Backends, lease_dir
+from troupe.core.runs.performance import Performance
 from troupe.core.vcs import Applicability
 from troupe.core.workspaces import worktree_path
 from troupe_plugin_sdk.messages import Message
@@ -88,6 +89,8 @@ class Theatre:
         )
         self.artifacts = MemoryArtifactStore()
         self.sent: list[Any] = []
+        self.performances: dict[str, str] = {}
+        """Each run's performance, recorded with its start as perform records it."""
         self.backends = Backends(event_store=self._event_store, artifact_store=self._artifact_store)
 
     def _event_store(self, session: Session) -> EventStore:
@@ -142,7 +145,19 @@ class Theatre:
         return made
 
     def record(self, run: Run) -> None:
-        self.store.command(via="cli", performance=PERFORMANCE).record(run.collect_events())
+        events = list(run.collect_events())
+        performance = self.performances.get(run.run_id)
+        if performance is None:
+            performance = self.performances[run.run_id] = str(uuid4())
+            started = Performance(
+                performance_id=performance,
+                performed={"kind": "actor", "name": "tester"},
+                steps=[{"actor": "tester"}],
+                direction="sha256:" + "a" * 64,
+                config=["sha256:" + "b" * 64],
+            )
+            events = [*started.collect_events(), *events]
+        self.store.command(via="cli", performance=performance).record(events)
 
     def call(self, command: Callable[..., Any], request: Message) -> Any:  # noqa: ANN401
         session = Session(theatre=self.path, env=dict(ADA))
@@ -500,7 +515,7 @@ def test_a_settling_approved_in_a_role_carries_that_approval(theatre: Theatre) -
         run.run_id,
         "approved",
         lambda r: r.accept_changes(diff, ["a.txt"], approved_as="director"),
-        performance=PERFORMANCE,
+        performance=theatre.performances[run.run_id],
         approved_as="director",
     )
     accepted = theatre.last(run)
@@ -518,7 +533,7 @@ def test_a_settling_recorded_as_a_given_command_is_that_commands(theatre: Theatr
         run.run_id,
         "ignored",
         lambda r: r.discard_changes(),
-        performance=PERFORMANCE,
+        performance=theatre.performances[run.run_id],
         command=command,
     )
     discarded = theatre.last(run)
