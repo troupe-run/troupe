@@ -57,6 +57,9 @@
   hold anything else, and the fix. Catalogue the code. Verify: projection tests for a run with a performance, and for
   a store holding a pre-performances run's segment alone and one sharing a segment with a config change. Each
   checks the error's details and fix.
+  `perform` refuses such a theatre before it records or runs anything, rehearsals too, and troupe's turn at the gate
+  reads only its own run. Verify:
+  `test_perform_refuses_a_theatre_holding_a_run_from_before_performances_before_running[for real|rehearsed]`.
 - [x] 5.2 Extend `resolve` to performance ids and prefixes (D6). Add `performance.several-runs` and catalogue it.
   Verify:
   - `diff`, `approve` and `logs` work through a performance id;

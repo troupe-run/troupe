@@ -590,7 +590,7 @@ def test_an_event_outside_a_performance_records_no_performance(tmp_path: Path) -
     assert "performance" not in lineage_of(tmp_path, recorded.event_id)
 
 
-def test_a_commands_performance_is_in_every_event_it_and_its_agent_record(
+def test_a_commands_performance_is_in_what_it_records_and_carried_by_its_agent(
     tmp_path: Path,
 ) -> None:
     service = files_service(tmp_path)
