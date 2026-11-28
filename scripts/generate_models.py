@@ -34,6 +34,7 @@ COMMAND = "uv run scripts/generate_models.py"
 SOURCES: dict[str, str] = {
     "Actor": "config/actor.schema.json",
     "Runtime": "config/runtime.schema.json",
+    "Flow": "config/flow.schema.json",
     "ConfigChanged": "events/config-changed.schema.json",
 }
 """Each schema the models are generated from, by the name of its model. The first is the bundle's

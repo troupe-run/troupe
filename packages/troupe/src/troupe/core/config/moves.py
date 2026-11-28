@@ -14,9 +14,11 @@ from troupe.core.config.changes import RENAMED_FROM, Rename, get, is_rename, val
 from troupe.core.config.kinds import (
     ACTORS,
     CHARACTER,
+    FLOWS,
     KINDS,
     RUNTIMES,
     actor_files,
+    flow_file,
     runtime_file,
 )
 from troupe.core.config_paths import shown
@@ -41,17 +43,18 @@ def renames(operations: Sequence[Operation]) -> list[tuple[tuple[str, ...], tupl
 
 def refuse_move(config: Mapping[str, Any], path: Sequence[str], source: Sequence[str]) -> None:
     """Refuse, recording nothing, a rename of ``source`` to ``path`` in ``config`` that isn't a
-    whole actor or runtime to a free name of its kind, or that names a built-in runtime."""
+    whole actor, runtime or flow to a free name of its kind, or that names a built-in runtime."""
     new, old = tuple(path), tuple(source)
     details = {"path": list(new), "from": list(old)}
     if len(new) != 2 or len(old) != 2 or old[0] not in KINDS or new[0] not in KINDS:
         raise TroupeError(
             "config.move-not-entity",
-            problem=f"troupe config mv renames a whole actor or runtime, and {shown(old)} to "
-            f"{shown(new)} isn't one: only actors.<name> and runtimes.<name> can be renamed.",
-            fix="Name the actor or runtime itself, such as troupe config mv actors.tester "
+            problem=f"troupe config mv renames a whole actor, runtime or flow, and {shown(old)} to "
+            f"{shown(new)} isn't one: only actors.<name>, runtimes.<name> and flows.<name> can be "
+            "renamed.",
+            fix="Name the actor, runtime or flow itself, such as troupe config mv actors.tester "
             "actors.qa; to change a value, use troupe config set.",
-            details={**details, "rule": "only a whole actor or runtime can be renamed"},
+            details={**details, "rule": "only a whole actor, runtime or flow can be renamed"},
         )
     if old[0] != new[0]:
         raise TroupeError(
@@ -91,12 +94,14 @@ def refuse_move(config: Mapping[str, Any], path: Sequence[str], source: Sequence
 
 
 def _a(kind: str) -> str:
-    return "an actor" if kind == ACTORS else "a runtime"
+    return {ACTORS: "an actor", FLOWS: "a flow"}.get(kind, "a runtime")
 
 
 def files_of(kind: str, name: str) -> tuple[str, ...]:
     """The config files an entity has, relative to .troupe/."""
-    return actor_files(name) if kind == ACTORS else (runtime_file(name),)
+    if kind == ACTORS:
+        return actor_files(name)
+    return (flow_file(name),) if kind == FLOWS else (runtime_file(name),)
 
 
 def moved_files(entries: Sequence[Mapping[str, Any]]) -> dict[str, str]:

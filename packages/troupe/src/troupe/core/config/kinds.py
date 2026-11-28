@@ -30,13 +30,16 @@ if TYPE_CHECKING:  # loaded where a schema is checked: it's slow to load (cli-st
 
 ACTORS = "actors"
 RUNTIMES = "runtimes"
-KINDS = (ACTORS, RUNTIMES)
+FLOWS = "flows"
+KINDS = (ACTORS, RUNTIMES, FLOWS)
 """Every kind of config, by its key at the top of config."""
 
 ACTOR_SCHEMA = "https://troupe.run/protocol/config/actor.schema.json"
 """The actor schema's ``$id``: how troupe finds it among the schemas it carries."""
 RUNTIME_SCHEMA = "https://troupe.run/protocol/config/runtime.schema.json"
 """The runtime schema's ``$id``."""
+FLOW_SCHEMA = "https://troupe.run/protocol/config/flow.schema.json"
+"""The flow schema's ``$id`` (spec: flows)."""
 
 
 def schema_url(kind: str) -> str:
@@ -49,6 +52,11 @@ def schema_url(kind: str) -> str:
 def actor_schema_url() -> str:
     """Where config files name the actor schema."""
     return schema_url("actor")
+
+
+def flow_schema_url() -> str:
+    """Where config files name the flow schema."""
+    return schema_url("flow")
 
 
 def runtime_schema_url() -> str:
@@ -114,6 +122,11 @@ def problems(
         known = runtime_shapes(config)
         for name, actor in sorted(actors.items()):
             found += actor_problems(name, actor, known, touched=name in touched, typed=typed)
+    flows = config.get(FLOWS)
+    if isinstance(flows, Mapping):
+        named = actors if isinstance(actors, Mapping) else {}
+        for name, flow in sorted(flows.items()):
+            found += flow_problems(name, flow, named, typed)
     return sorted(found, key=lambda problem: problem.path)
 
 
@@ -197,6 +210,81 @@ def runtime_problems(name: str, runtime: object, typed: Typed = None) -> list[Pr
                 f"Set {shown((*base, 'endpoint'))}=<url>.",
             )
         )
+    return sorted(found, key=lambda problem: problem.path)
+
+
+def flow_problems(
+    name: str, flow: object, actors: Mapping[str, Any], typed: Typed = None
+) -> list[Problem]:
+    """Every way the flow ``name`` breaks a rule (spec: flows, "A flow's steps must be
+    performable", "Flows and actors share one namespace"). Each rule that spans an actor names it
+    in ``related``, so a merge that breaks one on either side is a conflict."""
+    base = (FLOWS, name)
+    if not ACTOR_NAME.match(name) and _in_value(base, typed):
+        return [_bad_name("flow", base)]
+    if not ACTOR_NAME.match(name):
+        return [
+            Problem(
+                base,
+                f"{name!r} isn't a flow name: lowercase letters, digits and -, starting with a "
+                "letter, at most 64",
+                f"Unset {shown(base)}, and use a name that fits.",
+            )
+        ]
+    if not isinstance(flow, Mapping):
+        return [Problem(base, "a flow is a group of values, not a value", "Unset it.")]
+    found: list[Problem] = []
+    if name in actors:
+        found.append(
+            Problem(
+                base,
+                f"an actor is named {name!r} too: flows and actors share one namespace, so "
+                "troupe perform can tell which to run",
+                f"Rename one of them: troupe config mv {shown(base)} {shown((FLOWS, '<name>'))}",
+                related=((ACTORS, name),),
+            )
+        )
+    for key in WRITTEN_BY_TROUPE:
+        if key in flow:
+            found.append(
+                Problem((*base, key), f"{key} is written by troupe, never set", "Unset it.")
+            )
+    fields = {k: v for k, v in flow.items() if k not in WRITTEN_BY_TROUPE}
+    schema = _schema_problems(
+        base, fields, schemas.validator(FLOW_SCHEMA), against="flow", typed=typed
+    )
+    if schema:
+        return sorted(found + schema, key=lambda problem: problem.path)
+    at = (*base, "steps")
+    for index, step in enumerate(fields["steps"], start=1):
+        actor = step["actor"]
+        where = f"step {index} ({actor})"
+        if actor not in actors:
+            found.append(
+                Problem(
+                    at,
+                    f"{where} names an actor config doesn't have",
+                    f"Set the actor first, or name one that exists: troupe config get {ACTORS}",
+                    related=((ACTORS, actor),),
+                )
+            )
+            continue
+        defined = actors[actor] if isinstance(actors[actor], Mapping) else {}
+        if defined.get("workspace") == "theatre":
+            found.append(
+                Problem(
+                    at,
+                    f"{where} names an actor that works in the theatre: a flow's steps build on "
+                    "each other in worktrees, and your files change only at its end",
+                    f"Set {shown((ACTORS, actor, 'workspace'))}=worktree, or name another actor.",
+                    related=((ACTORS, actor, "workspace"),),
+                )
+            )
+        if "approvers" in step:
+            from troupe.core import gates
+
+            for rule in gates.approvers_problems(step["approvers"], workspace=None):
+                found.append(Problem(at, f"{where}'s approvers: {rule.rule}", rule.fix))
     return sorted(found, key=lambda problem: problem.path)
 
 
@@ -869,7 +957,7 @@ RESERVED = ("events", "local", ".gitignore", ".gitattributes", "troupe.yaml")
 """Never config: the event store's, troupe's own git files, and troupe.yaml, held for #6's root
 file."""
 
-CONFIG_DIRECTORIES = ("actors", "runtimes")
+CONFIG_DIRECTORIES = ("actors", "runtimes", "flows")
 """The directories that hold config files, one per kind."""
 
 OPERATING_SYSTEM_FILES = (".DS_Store", "Thumbs.db", "desktop.ini")
@@ -895,6 +983,7 @@ FILE_KINDS = (
     FileKind(re.compile(r"\Aactors/(?P<name>[^/]+)\.yaml\Z"), ACTORS, "fields", ACTOR_SCHEMA),
     FileKind(re.compile(r"\Aactors/(?P<name>[^/]+)\.md\Z"), ACTORS, "character", None),
     FileKind(re.compile(r"\Aruntimes/(?P<name>[^/]+)\.yaml\Z"), RUNTIMES, "fields", RUNTIME_SCHEMA),
+    FileKind(re.compile(r"\Aflows/(?P<name>[^/]+)\.yaml\Z"), FLOWS, "fields", FLOW_SCHEMA),
 )
 """Each kind of config file, matched by path. Shaped as a guest's registration will need (a
 pattern, a kind and a schema), though guests can't add to it yet."""
@@ -903,6 +992,11 @@ pattern, a kind and a schema), though guests can't add to it yet."""
 def actor_files(name: str) -> tuple[str, str]:
     """The paths, relative to .troupe/, of the actor ``name``'s YAML file and character file."""
     return f"actors/{name}.yaml", f"actors/{name}.md"
+
+
+def flow_file(name: str) -> str:
+    """The path, relative to .troupe/, of the flow ``name``'s file."""
+    return f"flows/{name}.yaml"
 
 
 def runtime_file(name: str) -> str:

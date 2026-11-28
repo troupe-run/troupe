@@ -45,11 +45,14 @@ from troupe.core.config.kinds import (
     ACTORS,
     CHARACTER,
     CONFIG_DIRECTORIES,
+    FLOWS,
     OPERATING_SYSTEM_FILES,
     RUNTIMES,
     actor_files,
     actor_schema_url,
     file_kind,
+    flow_file,
+    flow_schema_url,
     runtime_file,
     runtime_schema_url,
     staged_name,
@@ -81,6 +84,9 @@ file. A test checks it against the schema, so a field added there can't be left 
 RUNTIME_FIELD_ORDER = ("$schema", "endpoint", "model", "credential", "engine", "prices")
 """The runtime file's keys, in its schema's order. A test checks it against the schema, so a field
 added there can't be left out of the file."""
+FLOW_FIELD_ORDER = ("$schema", "steps")
+"""The flow file's keys, in its schema's order (spec: config-files, "Each flow is projected to its
+own file")."""
 
 WRITTEN = "local/config/written.jsonl"
 LOCK = "local/config"
@@ -181,6 +187,20 @@ def render_runtime(runtime: Mapping[str, Any]) -> bytes:
     return text.getvalue().encode("utf-8")
 
 
+def render_flow(flow: Mapping[str, Any]) -> bytes:
+    """A flow's file: its steps, in order, each with the fields config sets (spec: config-files,
+    "Each flow is projected to its own file")."""
+    url = flow_schema_url()
+    fields: dict[str, Any] = {"$schema": url}
+    for key in FLOW_FIELD_ORDER[1:]:
+        if key in flow:
+            fields[key] = _sorted(flow[key])
+    text = io.StringIO()
+    text.write(f"# yaml-language-server: $schema={url}\n")
+    _yaml().dump(fields, text)
+    return text.getvalue().encode("utf-8")
+
+
 def render(config: Mapping[str, Any]) -> dict[str, bytes]:
     """Every config file config makes, by its path relative to .troupe/."""
     files: dict[str, bytes] = {}
@@ -188,6 +208,10 @@ def render(config: Mapping[str, Any]) -> dict[str, bytes]:
     for name, runtime in sorted(runtimes.items() if isinstance(runtimes, Mapping) else []):
         if isinstance(runtime, Mapping):
             files[runtime_file(name)] = render_runtime(runtime)
+    flows = config.get(FLOWS, {})
+    for name, flow in sorted(flows.items() if isinstance(flows, Mapping) else []):
+        if isinstance(flow, Mapping):
+            files[flow_file(name)] = render_flow(flow)
     actors = config.get(ACTORS, {})
     for name, actor in sorted(actors.items() if isinstance(actors, Mapping) else []):
         if not isinstance(actor, Mapping):

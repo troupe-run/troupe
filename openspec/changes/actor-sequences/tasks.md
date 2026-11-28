@@ -4,17 +4,17 @@ Each group lands as its own push on one pull request, in this order, and is revi
 
 ## 1. The `flows` config kind
 
-- [ ] 1.1 Add `protocol/schemas/config/flow.schema.json` (steps, at least one, each with `actor`, optional `direction`
+- [x] 1.1 Add `protocol/schemas/config/flow.schema.json` (steps, at least one, each with `actor`, optional `direction`
   and `approvers`), regenerate the models, and package the schemas. Verify: config schema tests accept a flow and
   refuse an empty step list, an unknown field and a malformed approvers list.
-- [ ] 1.2 Add `FLOWS` to `kinds.py` with its cross-kind rules (D1): a missing actor, a theatre actor, a name shared
+- [x] 1.2 Add `FLOWS` to `kinds.py` with its cross-kind rules (D1): a missing actor, a theatre actor, a name shared
   with an actor, and removing or moving an actor a flow uses. Verify: unit tests for each refusal naming flow, step
   and rule, and a merge test showing a rule broken across branches is a conflict.
-- [ ] 1.3 Project flows to `.troupe/flows/<name>.yaml`, swept like other config files. Verify: config-files tests for
+- [x] 1.3 Project flows to `.troupe/flows/<name>.yaml`, swept like other config files. Verify: config-files tests for
   a written flow, a hand edit swept with an `unknown` actor, and a removed flow's file.
-- [ ] 1.4 Let `config mv` rename a flow, and carry an actor's rename into the flow steps that name it. Verify: rename
+- [x] 1.4 Let `config mv` rename a flow, and carry an actor's rename into the flow steps that name it. Verify: rename
   tests for both, including an actor named twice in one flow.
-- [ ] 1.5 Document the kind in `docs/prompt-book/config-schema.md` (generated) and `docs/stagecraft/build-a-flow.md`
+- [x] 1.5 Document the kind in `docs/prompt-book/config-schema.md` (generated) and `docs/stagecraft/build-a-flow.md`
   (how to write one). Verify: the docs and reference checks pass.
 
 ## 2. Worktrees built on the work so far

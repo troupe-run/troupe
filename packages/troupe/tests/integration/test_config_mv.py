@@ -133,14 +133,14 @@ def test_renaming_a_runtime_sets_runtime_on_each_actor_that_names_it_in_the_same
     assert {actor["runtime"] for actor in config["actors"].values()} == {"gpu"}
 
 
-# Requirement: Only a whole actor or runtime can be renamed
+# Requirement: Only a whole actor, runtime or flow can be renamed
 
 
 def test_a_value_path_is_refused_as_not_an_entity(repo: Repo) -> None:
     _set(repo, ["actors", "tester"], TESTER)
     error = _refused(repo, ["actors", "tester", "runner"], ["actors", "tester", "model"])
     assert error.code == "config.move-not-entity"
-    assert "only actors.<name> and runtimes.<name>" in error.problem
+    assert "only actors.<name>, runtimes.<name> and flows.<name>" in error.problem
 
 
 def test_a_rename_across_kinds_is_refused_as_not_keeping_its_kind(repo: Repo) -> None:

@@ -31,6 +31,7 @@ from troupe.core.errors import TroupeError
 
 ACTOR_SCHEMA = "https://troupe.run/protocol/config/actor.schema.json"
 RUNTIME_SCHEMA = "https://troupe.run/protocol/config/runtime.schema.json"
+FLOW_SCHEMA = "https://troupe.run/protocol/config/flow.schema.json"
 RUNNER_OPTIONS = "#runnerOptions"
 
 
@@ -138,7 +139,7 @@ def _child(node: Any, resolver: Any, key: str) -> tuple[Any, Any] | None:  # noq
 
 def kinds_at(path: Sequence[str], runner: str | None) -> set[str]:
     """The JSON types the schema allows at ``path``: empty when no single schema says."""
-    if len(path) >= 1 and path[0] not in ("actors", "runtimes"):
+    if len(path) >= 1 and path[0] not in ("actors", "runtimes", "flows"):
         return set()
     if len(path) == 1:
         return {"object"}
@@ -146,6 +147,8 @@ def kinds_at(path: Sequence[str], runner: str | None) -> set[str]:
         return {"object"}
     if path[0] == "runtimes":
         return _kinds_in(RUNTIME_SCHEMA, path[2:], runner)
+    if path[0] == "flows":
+        return _kinds_in(FLOW_SCHEMA, path[2:], runner)
     field = path[2]
     if field == "character":
         return {"string"} if len(path) == 3 else set()

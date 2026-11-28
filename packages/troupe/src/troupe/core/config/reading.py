@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from troupe.core import defaults
-from troupe.core.config.kinds import ACTORS, CHARACTER, RUNTIMES, file_kind
+from troupe.core.config.kinds import ACTORS, CHARACTER, FLOWS, RUNTIMES, file_kind
 from troupe.core.config_paths import shown as shown_path
 from troupe.core.errors import TroupeError
 from troupe.core.files import read_file
@@ -157,6 +157,7 @@ def _yaml() -> "YAML":
 _SCHEMA_PATTERN = {
     ACTORS: re.compile(r"(^|/)config/actor\.schema\.json$"),
     RUNTIMES: re.compile(r"(^|/)config/runtime\.schema\.json$"),
+    FLOWS: re.compile(r"(^|/)config/flow\.schema\.json$"),
 }
 
 

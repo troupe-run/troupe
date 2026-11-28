@@ -118,8 +118,10 @@ def is_rename(entry: Mapping[str, Any]) -> bool:
 def rename(tree: Mapping[str, Any], path: Sequence[str], source: Sequence[str]) -> list[Entry]:
     """The entries that rename the group at ``source`` to ``path``: the rename entry and, for a
     runtime, an entry setting ``runtime`` to the new name on each actor that names the old one, in
-    name order. None when there's no group at ``source``; the caller refuses that first."""
-    from troupe.core.config.kinds import ACTORS, RUNTIMES
+    name order; for an actor, an entry setting the steps of each flow that names it (spec:
+    config-renames, "An actor's rename carries the flows that name it"). None when there's no group
+    at ``source``; the caller refuses that first."""
+    from troupe.core.config.kinds import ACTORS, FLOWS, RUNTIMES
 
     group = get(tree, source)
     if not isinstance(group, Mapping):
@@ -137,6 +139,23 @@ def rename(tree: Mapping[str, Any], path: Sequence[str], source: Sequence[str]) 
                 entry = _entry(at, source[1], path[1])
                 if entry is not None:
                     entries.append(entry)
+    if source[0] == ACTORS:
+        found = tree.get(FLOWS)
+        flows: Mapping[str, Any] = found if isinstance(found, Mapping) else {}
+        for name in sorted(flows):
+            flow = flows[name]
+            steps = flow.get("steps") if isinstance(flow, Mapping) else None
+            if not isinstance(steps, list):
+                continue
+            renamed = [
+                {**step, "actor": path[1]}
+                if isinstance(step, Mapping) and step.get("actor") == source[1]
+                else step
+                for step in steps
+            ]
+            entry = _entry((FLOWS, name, "steps"), steps, renamed)
+            if entry is not None:
+                entries.append(entry)
     return entries
 
 
