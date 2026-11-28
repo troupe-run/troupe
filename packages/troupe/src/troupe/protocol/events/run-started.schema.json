@@ -17,11 +17,22 @@
     "direction",
     "config",
     "workspace",
-    "on_context_full"
+    "on_context_full",
+    "step"
   ],
   "properties": {
     "lineage": {
-      "$ref": "../lineage.schema.json"
+      "allOf": [
+        {
+          "$ref": "../lineage.schema.json"
+        },
+        {
+          "required": [
+            "performance"
+          ]
+        }
+      ],
+      "description": "Its lineage names the run's performance (spec: lineage, \"Lineage names an event's performance\")."
     },
     "timestamp": {
       "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
@@ -84,6 +95,11 @@
           ]
         }
       }
+    },
+    "step": {
+      "description": "The run's step in its performance, counting from 1. Every performance has one step until flows.",
+      "type": "integer",
+      "minimum": 1
     },
     "approvers": {
       "description": "A worktree run's approvers, as troupe resolved them when the run started: the order its gate tries them in, and where they came from. Present exactly when the run works in a worktree.",

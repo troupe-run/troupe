@@ -261,14 +261,14 @@ def test_a_worktree_that_fails_to_fill_ends_the_run_could_not_start_and_leaves_n
 
 def failing_worktree_made(store: EventStore) -> EventStore:
     """A store whose write of Run.WorktreeMade fails as a full disk would."""
-    original = store.record_with_lineage
+    original = store.record_with_lineages
 
-    def record(events: Any, lineage: Any, **kwargs: Any) -> Any:  # noqa: ANN401
+    def record(events: Any, lineages: Any, **kwargs: Any) -> Any:  # noqa: ANN401
         if any(type(event).__qualname__ == "Run.WorktreeMade" for event in events):
             raise TroupeError("artifact.write-failed", problem="No space.", fix="Free some.")
-        return original(events, lineage, **kwargs)
+        return original(events, lineages, **kwargs)
 
-    store.record_with_lineage = record  # type: ignore[method-assign]
+    store.record_with_lineages = record  # type: ignore[method-assign]
     return store
 
 

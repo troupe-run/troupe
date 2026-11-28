@@ -184,6 +184,7 @@ def render_run(run: Mapping[str, Any]) -> list[str]:
     started_by = run["startedBy"]
     lines = [
         f"run {run['runId']}",
+        f"  performance: {run['performanceId']} (step {run['step']})",
         f"  actor: {actor_shown(run)}",
         f"  started by: {started_by.get('id', started_by['kind'])} at {run['startedAt']}",
         f"  runner: {run['runner']['requested']}"
@@ -313,7 +314,9 @@ def _changes(changes: Mapping[str, Any]) -> list[str]:
 
 
 def render_run_line(run: Mapping[str, Any]) -> str:
-    """One line for a run in a list."""
+    """One line for a performance in a list: its id, then its run's, by the first 8 characters,
+    then the run (performances design D7). Until flows, each performance has one run, so its
+    line is its run's."""
     status = run["outcome"] if run["state"] == "ended" else run["state"]
     cue = (run.get("changes") or {}).get("cue")
     if cue is not None:
@@ -326,6 +329,7 @@ def render_run_line(run: Mapping[str, Any]) -> str:
         estimated = " estimated" if cost["kind"] == "estimated" else ""
         costed = f", {_amount(cost['usd'], cost['kind'])}{estimated}"
     return (
-        f"{run['runId']}  {status:<20} {actor_shown(run):<16} {run['startedAt']}  "
+        f"{run['performanceId']}  run {run['runId'][:8]}  {status:<20} {actor_shown(run):<16} "
+        f"{run['startedAt']}  "
         f"{run['events']} events{noticed}{costed}"
     )

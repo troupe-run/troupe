@@ -42,6 +42,7 @@ from troupe.core.events.lineage import (
     VcsState,
     Via,
     lineage_problem,
+    performance_problem,
     timestamp,
 )
 from troupe.core.events.port import EventRecorder, RecordedEvent, load_store
@@ -137,16 +138,19 @@ class EventStore:
         reason: str | None = None,
         actor: Actor | None = None,
         stage: StageLineage | None = None,
+        performance: str | None = None,
     ) -> "Command":
         """Start a command: resolve the actor (unless given, as for an agent troupe runs or an
         unknown hand edit) and mint its change id. Nothing is written yet. ``stage`` is where the
-        run this command records ran, when it records one (design D7)."""
+        run this command records ran, when it records one (design D7); ``performance`` is the
+        performance the events it records belong to, when they do (performances design D4)."""
         return Command(
             self,
             actor=self.identify() if actor is None else actor,
             via=via,
             reason=reason,
             stage=stage,
+            performance=performance,
         )
 
     def vcs_state(self, source: Source | None = None) -> VcsState:
@@ -163,10 +167,12 @@ class EventStore:
         actor: Actor | None = None,
         reason: str | None = None,
         approvals: Sequence[Approval] = (),
+        performance: str | None = None,
     ) -> list[Recorded]:
         """Record ``events`` in reaction to the event ``trigger``: they carry its change id and
         name it as their cause (design D8). ``approvals`` is filled in only by a gate keeping a
-        run's work (manual-gates design D1)."""
+        run's work (manual-gates design D1); ``performance`` names the performance they belong to
+        (performances design D4)."""
         triggered = self.recorder.event(trigger)
         if triggered is None:
             raise _cause_unknown(trigger)
@@ -187,6 +193,7 @@ class EventStore:
             cause=EventCause(trigger),
             vcs=self.vcs_state(),
             approvals=tuple(approvals),
+            performance=performance,
         )
         return self.record_with_lineage(events, lineage)
 
@@ -218,8 +225,8 @@ class EventStore:
             msg = "record_with_lineages needs exactly one lineage per event"
             raise ValueError(msg)
         datas = [lineage.to_data() for lineage in lineages]
-        for lineage, data in zip(lineages, datas, strict=True):
-            problem = lineage_problem(data)
+        for event, lineage, data in zip(events, lineages, datas, strict=True):
+            problem = lineage_problem(data) or performance_problem(get_topic(type(event)), data)
             if problem is not None:
                 raise TroupeError(
                     "events.lineage-invalid",
@@ -329,18 +336,20 @@ class Command:
         reason: str | None,
         stage: StageLineage | None = None,
         change: str | None = None,
+        performance: str | None = None,
     ) -> None:
         self.store = store
         self.actor = actor
         self.via = via
         self.reason = reason
         self.stage = stage
+        self.performance = performance
         self.change = new_ulid() if change is None else change
 
     def acting_as(self, actor: Actor, *, via: Via) -> "Command":
         """This command, recording as another actor through another surface: the same change id,
-        cause, reason and stage. A run's own events are the agent's, through the runner, though a
-        person's command records them (perform-status-logs design D8)."""
+        cause, reason, stage and performance. A run's own events are the agent's, through the
+        runner, though a person's command records them (perform-status-logs design D8)."""
         return Command(
             self.store,
             actor=actor,
@@ -348,6 +357,20 @@ class Command:
             reason=self.reason,
             stage=self.stage,
             change=self.change,
+            performance=self.performance,
+        )
+
+    def in_performance(self, performance: str) -> "Command":
+        """This command, recording events that belong to ``performance``: the same actor, surface,
+        reason, stage and change id (performances design D4)."""
+        return Command(
+            self.store,
+            actor=self.actor,
+            via=self.via,
+            reason=self.reason,
+            stage=self.stage,
+            change=self.change,
+            performance=performance,
         )
 
     def lineage(self, source: Source | None = None, approvals: Sequence[Approval] = ()) -> Lineage:
@@ -361,6 +384,7 @@ class Command:
             vcs=self.store.vcs_state(source),
             approvals=tuple(approvals),
             stage=self.stage,
+            performance=self.performance,
         )
 
     def record(

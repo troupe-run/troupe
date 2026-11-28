@@ -20,7 +20,7 @@ import pytest
 from gitrepo import Repo, clone
 from platform_locks_shared import held_by_another_process
 from run_queries_shared import STAGE, Child, started
-from runtesting import INIT, OK, Harness, failing_at, request, script, theatre, turn
+from runtesting import INIT, OK, PERFORMANCE, Harness, failing_at, request, script, theatre, turn
 from storetesting import (
     FOLLOW_BOUND,
     SLOW_STRETCH_SECONDS,
@@ -64,10 +64,11 @@ def recorded_start(store: EventStore, run_id: str) -> None:
         config=["sha256:" + "b" * 64],
         workspace={"kind": "theatre"},
         on_context_full={"value": "fail", "source": "default"},
+        step=1,
     )
-    store.command(via="cli").record(run.collect_events())
+    store.command(via="cli", performance=PERFORMANCE).record(run.collect_events())
     run.report(0, {"runId": run_id, "seq": 0, "type": "log", "level": "info", "message": "m"})
-    store.command(via="runner").record(run.collect_events())
+    store.command(via="runner", performance=PERFORMANCE).record(run.collect_events())
 
 
 # 8.1: each derived state.
@@ -233,7 +234,7 @@ def test_a_runs_reported_runner_is_read_from_its_init_event(tmp_path: Path) -> N
     store = git_service(harness.repo)
     run = started(store, {"kind": "theatre"})
     run.report(0, init(run))
-    store.command(via="runner").record(run.collect_events())
+    store.command(via="runner", performance=PERFORMANCE).record(run.collect_events())
     [summary] = harness.status(run=run.run_id).runs
     assert summary.to_data()["runner"] == {
         "requested": "scripted",
@@ -246,7 +247,7 @@ def test_a_run_ended_before_its_runner_sent_init_has_no_reported_runner(tmp_path
     store = git_service(harness.repo)
     run = started(store, {"kind": "theatre"})
     run.report(0, {"runId": run.run_id, "seq": 0, "type": "log", "level": "info", "message": "m"})
-    store.command(via="runner").record(run.collect_events())
+    store.command(via="runner", performance=PERFORMANCE).record(run.collect_events())
     [summary] = harness.status(run=run.run_id).runs
     assert summary.to_data()["runner"] == {"requested": "scripted"}
 
@@ -258,7 +259,7 @@ def test_a_worktree_not_made_yet_has_no_clones_and_one_made_has_them(tmp_path: P
     [summary] = harness.status(run=run.run_id).runs
     assert summary.to_data()["workspace"] == WORKTREE
     run.made_worktree(["copy"])
-    store.command(via="cli").record(run.collect_events())
+    store.command(via="cli", performance=PERFORMANCE).record(run.collect_events())
     [summary] = harness.status(run=run.run_id).runs
     assert summary.to_data()["workspace"] == {**WORKTREE, "clones": ["copy"]}
 
@@ -281,7 +282,7 @@ def reported_result(harness: Harness, **fields: Any) -> dict[str, Any]:  # noqa:
     run.report(0, init(run))
     result = {"runId": run.run_id, "seq": 1, "type": "result", "status": "ok", "message": "m"}
     run.report(1, {**result, **fields})
-    store.command(via="runner").record(run.collect_events())
+    store.command(via="runner", performance=PERFORMANCE).record(run.collect_events())
     [summary] = harness.status(run=run.run_id).runs
     return summary.to_data()
 
@@ -322,7 +323,7 @@ def test_a_run_with_no_result_yet_has_no_usage_or_cost(tmp_path: Path) -> None:
     store = git_service(harness.repo)
     run = started(store, {"kind": "theatre"})
     run.report(0, init(run))
-    store.command(via="runner").record(run.collect_events())
+    store.command(via="runner", performance=PERFORMANCE).record(run.collect_events())
     [summary] = harness.status(run=run.run_id).runs
     assert "usage" not in summary.to_data()
     assert "cost" not in summary.to_data()

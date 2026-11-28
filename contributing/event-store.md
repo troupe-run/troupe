@@ -70,6 +70,8 @@ A segment's first line is its header; every later line is one event. Lines are s
   | `troupe.core.runs.aggregate:Run.GatePassed` | [`events/run-gate-passed.schema.json`](../protocol/schemas/events/run-gate-passed.schema.json) |
   | `troupe.core.runs.aggregate:Run.CueRaised` | [`events/run-cue-raised.schema.json`](../protocol/schemas/events/run-cue-raised.schema.json) |
   | `troupe.core.runs.aggregate:Run.ChangesRejected` | [`events/run-changes-rejected.schema.json`](../protocol/schemas/events/run-changes-rejected.schema.json) |
+  | `troupe.core.runs.performance:Performance.Started` | [`events/performance-started.schema.json`](../protocol/schemas/events/performance-started.schema.json) |
+  | `troupe.core.runs.performance:Performance.Ended` | [`events/performance-ended.schema.json`](../protocol/schemas/events/performance-ended.schema.json) |
   | `troupe.core.config.aggregate:Config.Changed` | [`events/config-changed.schema.json`](../protocol/schemas/events/config-changed.schema.json) |
   | `troupe.core.config.aggregate:Config.Settled` | [`events/config-settled.schema.json`](../protocol/schemas/events/config-settled.schema.json) |
 - **Batches are all or nothing.** A batch is written with one fsynced append, and each line names its batch. A
@@ -199,6 +201,7 @@ say is left out, never written as `null`.
 | `approvals` | Who approved it, in which role: one approval on the acceptance that keeps a run's work at a gate (troupe's, in role `troupe`, or a person's, in role `director`), and empty on every other event |
 | `vcs` | The adapter; the branch, left out when HEAD is detached or the adapter has no branches; HEAD, left out before the first commit; and for an event made from a file, its theatre-relative path and its before and after content hashes, each left out when the file didn't exist or no longer does |
 | `stage` | For an event a run recorded, the stage the actor ran on and whether its effects were `enforced` or `unenforced`; for an unenforced run, the policy setting and source that allowed it (`allowedBy`). Left out for every other event |
+| `performance` | The performance the event belongs to: required on every event of a performance's stream and of a run's stream, whoever records it, and refused on every other event, such as a config change. Checked by topic when an event is recorded (`events.lineage-invalid`), and by each event's schema |
 
 **Correlation and cause.** If a command records E1, and E2, E3 and E4 are recorded in reaction to E1, all four
 carry the command's change id, and E2 to E4 name E1 as their cause. A reaction to E2 still carries the same change

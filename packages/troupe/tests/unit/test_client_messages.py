@@ -230,6 +230,8 @@ def summaries(draw: st.DrawFn) -> dict[str, Any]:
         st.fixed_dictionaries(
             {
                 "runId": RUN_IDS,
+                "performanceId": RUN_IDS,
+                "step": st.integers(min_value=1, max_value=10),
                 "actor": NAMES,
                 "startedBy": ACTORS,
                 "runner": st.fixed_dictionaries(
@@ -324,8 +326,20 @@ CASES: list[tuple[object, str, st.SearchStrategy[Any]]] = [
         m.PerformUpdate,
         "perform-update.schema.json",
         st.fixed_dictionaries(
-            {"kind": st.just("started"), "runId": RUN_IDS},
+            {
+                "kind": st.just("started"),
+                "runId": RUN_IDS,
+                "performanceId": RUN_IDS,
+                "step": st.integers(min_value=1, max_value=10),
+            },
             optional={"worktree": st.just(".troupe/local/worktrees/0f8fad5b")},
+        )
+        | st.fixed_dictionaries(
+            {
+                "kind": st.just("performance-started"),
+                "performanceId": RUN_IDS,
+                "performed": st.fixed_dictionaries({"kind": st.just("actor"), "name": NAMES}),
+            }
         )
         | logged_events()
         | NOTICE_UPDATES,

@@ -11,7 +11,17 @@
   ],
   "properties": {
     "lineage": {
-      "$ref": "../lineage.schema.json"
+      "allOf": [
+        {
+          "$ref": "../lineage.schema.json"
+        },
+        {
+          "required": [
+            "performance"
+          ]
+        }
+      ],
+      "description": "Its lineage names the run's performance (spec: lineage, \"Lineage names an event's performance\")."
     },
     "timestamp": {
       "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"

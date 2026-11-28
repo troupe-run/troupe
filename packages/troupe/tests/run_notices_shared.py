@@ -2,7 +2,7 @@
 
 from uuid import uuid4
 
-from runtesting import INIT, STAGE, Harness
+from runtesting import INIT, PERFORMANCE, STAGE, Harness
 from storetesting import git_service
 from troupe.core.runs.aggregate import (
     Run,
@@ -34,11 +34,12 @@ def interrupted_with_a_notice(harness: Harness) -> str:
         config=["sha256:" + "b" * 64],
         workspace={"kind": "theatre"},
         on_context_full={"value": "fail", "source": "default"},
+        step=1,
     )
-    person = store.command(via="cli")
+    person = store.command(via="cli", performance=PERFORMANCE)
     person.record(run.collect_events())
     run.report(0, {**INIT["event"], "effects": "checked", "runId": run_id, "seq": 0})
-    store.command(via="runner").record(run.collect_events())
+    store.command(via="runner", performance=PERFORMANCE).record(run.collect_events())
     run.notice(SILENT)
     person.record(run.collect_events())
     lease_dir(harness.repo.path, run_id).mkdir(parents=True)

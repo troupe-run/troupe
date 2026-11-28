@@ -108,9 +108,11 @@
       "title": "Run summary",
       "type": "object",
       "additionalProperties": false,
-      "required": ["runId", "actor", "startedBy", "runner", "stage", "effectCheck", "workspace", "state", "events", "startedAt"],
+      "required": ["runId", "performanceId", "step", "actor", "startedBy", "runner", "stage", "effectCheck", "workspace", "state", "events", "startedAt"],
       "properties": {
         "runId": {"$ref": "#/$defs/runId"},
+        "performanceId": {"description": "The performance the run is a step of.", "$ref": "../lineage.schema.json#/$defs/performanceId"},
+        "step": {"description": "The run's step in its performance, counting from 1.", "type": "integer", "minimum": 1},
         "actor": {"$ref": "#/$defs/actorName"},
         "actorNow": {"description": "The actor's name now, when it has been renamed since the run (config mv, or files moved by hand), following every rename. Absent: the actor has its name still, or no longer exists.", "$ref": "#/$defs/actorName"},
         "startedBy": {"$ref": "../lineage.schema.json#/$defs/actor"},

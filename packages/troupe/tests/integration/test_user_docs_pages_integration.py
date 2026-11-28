@@ -21,7 +21,7 @@ import claude_stand_in
 import ollama_stand_in
 import openai_stand_in
 from gitrepo import AUTHOR, Repo, make_repo
-from runtesting import ADA
+from runtesting import ADA, succeeded_run
 from troupe.cli import init as init_cli
 from troupe.cli import main
 from troupe.core import interim
@@ -226,8 +226,7 @@ def test_the_claude_code_walkthrough_runs_as_written_with_a_stand_in_claude(
     # with Claude Code and your own direction").
     assert code == ExitCode.WAITING, err
     assert "waits at its gate for director" in err
-    run_id = out.split()[1]
-    assert out == f"run {run_id} succeeded\n"
+    run_id = succeeded_run(out)
     code, out, _ = cli("config", "get", "actors.lead.character")
     assert out.removesuffix("\n") == titled(walkthrough(), LEAD)
     assert not (project.path / "NOTES.md").exists()  # it's in the run's worktree
@@ -246,7 +245,7 @@ def test_the_claude_code_walkthrough_runs_as_written_with_a_stand_in_claude(
     stand_in_claude(tmp_path / "again", monkeypatch, write="LATER.md=later")
     code, out, err = run_line(lines[5], monkeypatch)
     assert code == 0, err
-    second = out.split()[1]
+    second = succeeded_run(out)
     assert f"run {second[:8]}'s changes were kept, approved by troupe" in err
     assert (project.path / "LATER.md").read_bytes() == b"later"
 
@@ -347,7 +346,7 @@ def test_the_offline_walkthrough_runs_as_written_with_no_claude(
     code, out, err = run_line(lines[-1], monkeypatch)
     # The scripted audition writes its file, which waits at its gate for director.
     assert code == ExitCode.WAITING, err
-    assert out == f"run {out.split()[1]} succeeded\n"
+    succeeded_run(out)
 
 
 def test_the_local_model_walkthrough_runs_as_written_with_a_stand_in_ollama(
@@ -384,7 +383,7 @@ def test_the_local_model_walkthrough_runs_as_written_with_a_stand_in_ollama(
     finally:
         server.stop()
     assert code == 0, err
-    assert out == f"run {out.split()[1]} succeeded\n"
+    succeeded_run(out)
 
 
 def test_the_openai_walkthrough_runs_as_written_with_a_stand_in_service(
@@ -416,7 +415,7 @@ def test_the_openai_walkthrough_runs_as_written_with_a_stand_in_service(
             "Bearer sk-docs-walkthrough-0123456789"
         ]
     assert code == 0, err
-    assert out == f"run {out.split()[1]} succeeded\n"
+    succeeded_run(out)
 
 
 def test_the_anthropic_walkthrough_runs_as_written_with_a_stand_in_service(
@@ -447,7 +446,7 @@ def test_the_anthropic_walkthrough_runs_as_written_with_a_stand_in_service(
         code, out, err = run_line(rest[-1], monkeypatch)
         assert len(fake.requests) == 1
     assert code == 0, err
-    assert out == f"run {out.split()[1]} succeeded\n"
+    succeeded_run(out)
 
 
 def test_the_mistralrs_walkthrough_runs_as_written_with_the_engine_stand_in(
@@ -492,7 +491,7 @@ def test_the_mistralrs_walkthrough_runs_as_written_with_the_engine_stand_in(
     assert "couldn't prepare its engine" not in warmed
     code, out, err = run_line(rest[-1], monkeypatch)
     assert code == 0, err
-    assert out == f"run {out.split()[1]} succeeded\n"
+    succeeded_run(out)
 
 
 def test_defining_your_own_actor_runs_as_written_with_a_stand_in_claude(
@@ -517,7 +516,7 @@ def test_defining_your_own_actor_runs_as_written_with_a_stand_in_claude(
     assert out.removesuffix("\n") == titled(text, "reviewer.md")
     code, out, err = run_line(lines[-1], monkeypatch)
     assert code == 0, err
-    assert out == f"run {out.split()[1]} succeeded\n"
+    succeeded_run(out)
 
 
 def test_the_runtimes_pages_commands_run_as_written_and_show_what_it_says(

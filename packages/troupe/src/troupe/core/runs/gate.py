@@ -33,6 +33,7 @@ from troupe.core.runs.backends import Backends
 from troupe.core.runs.changes import (
     SETTLED,
     keep,
+    performance_of,
     record_settling,
     settle_lock,
     settled_error,
@@ -70,8 +71,16 @@ def brief(
 
 
 def troupe_command(store: EventStore, person: Command) -> Command:
-    """troupe acting by itself within ``person``'s command: the same change id, no stage."""
-    return Command(store, actor=gates.troupe_actor(), via="cli", reason=None, change=person.change)
+    """troupe acting by itself within ``person``'s command: the same change id and performance,
+    no stage."""
+    return Command(
+        store,
+        actor=gates.troupe_actor(),
+        via="cli",
+        reason=None,
+        change=person.change,
+        performance=person.performance,
+    )
 
 
 def first_is_a_person(approvers: Sequence[str]) -> bool:
@@ -107,6 +116,7 @@ def troupes_step(
                 announce=announce,
                 command=command,
                 approved_as=gates.TROUPE,
+                ends="completed",
             )
         except TroupeError as error:
             if error.code != "run.changes-conflict":
@@ -121,7 +131,9 @@ def troupes_step(
                 run.pass_gate(gates.TROUPE, to, files)
                 run.raise_cue(to, brief(started["actor"], outcome, changes, after))
 
-            record_settling(store, run_id, None, pass_and_cue, command=command)
+            record_settling(
+                store, run_id, None, pass_and_cue, performance=performance_of(view), command=command
+            )
 
 
 # Answering a cue
@@ -174,6 +186,7 @@ def _approve(
             announce=announce,
             command=store.command(via="cli", actor=identity, reason=request.reason),
             approved_as=role,
+            ends="completed",
         )
 
 
@@ -198,7 +211,9 @@ def _reject(
                 view.run_id,
                 request.reason,
                 lambda run: run.reject_changes(role),
+                performance=performance_of(view),
                 command=store.command(via="cli", actor=identity, reason=request.reason),
+                ends="rejected",
             )
     return m.DiscardResult(
         run=view.run_id, worktree=changes["worktree"], rehearsed=bool(request.rehearse), notices=[]

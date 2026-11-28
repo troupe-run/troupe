@@ -32,11 +32,20 @@ from troupe.core.files import directory_lock
 from troupe.core.notices import Notice
 from troupe.core.runs.aggregate import Run
 from troupe.core.runs.backends import Backends, lease_dir
+from troupe.core.runs.performance import Outcome, Performance
 from troupe.core.runs.projections import RunView
 from troupe.core.runs.queries import read_runs, resolve, run_state
 from troupe.core.workspaces import remove_worktree, worktree_path
 
 SETTLED = ("accepted", "discarded", "rejected")
+
+
+def performance_of(view: RunView) -> str:
+    """The performance ``view``'s run is a step of. Reading runs back refuses a run without one,
+    so every view a command acts on has it (performances design D8)."""
+    if view.performance is None:
+        raise TypeError(f"run {view.run_id} names no performance")
+    return view.performance
 
 
 def view_of(store: EventStore, ref: str) -> RunView:
@@ -153,23 +162,40 @@ def record_settling(
     reason: str | None,
     settle: Callable[[Run], None],
     *,
+    performance: str,
     command: Command | None = None,
     approved_as: str | None = None,
+    ends: Outcome | None = None,
 ) -> None:
     """Record what ``settle`` does to the run, as ``command`` (a person's command, through
-    cli, by default). With ``approved_as``, the event carries one approval in that role, by the
-    command's own actor (spec: lineage, "Approvals come only from a gate")."""
+    cli, by default), naming the run's ``performance`` in its lineage. With ``approved_as``, the
+    run's events carry one approval in that role, by the command's own actor (spec: lineage,
+    "Approvals come only from a gate"). With ``ends``, the performance's end, with that outcome, is
+    recorded in the same batch, by the same command, with no approval (performances design D3)."""
     run = store.load(UUID(run_id))
     if not isinstance(run, Run):
         raise TypeError(f"run {run_id}'s stream doesn't hold a run")
     settle(run)
-    command = command or store.command(via="cli", actor=store.identify(), reason=reason)
+    command = (
+        command or store.command(via="cli", actor=store.identify(), reason=reason)
+    ).in_performance(performance)
     approvals = (
         [Approval(actor=command.actor, role=approved_as, at=timestamp(store.clock()))]
         if approved_as is not None
         else []
     )
-    command.record(run.collect_events(), approvals=approvals)
+    settled = run.collect_events()
+    over: list[Any] = []
+    if ends is not None:
+        loaded = store.load(UUID(performance))
+        if not isinstance(loaded, Performance):
+            raise TypeError(f"performance {performance}'s stream doesn't hold a performance")
+        loaded.end(ends)
+        over = list(loaded.collect_events())
+    store.record_with_lineages(
+        [*settled, *over],
+        [command.lineage(approvals=approvals)] * len(settled) + [command.lineage()] * len(over),
+    )
 
 
 def conflict(view: RunView, changes: dict[str, Any], failing: list[str]) -> TroupeError:
@@ -202,6 +228,7 @@ def keep(
     announce: Callable[[Notice], None],
     command: Command | None = None,
     approved_as: str | None = None,
+    ends: Outcome | None = None,
 ) -> m.AcceptResult:
     """Apply the run's diff (``data``) to the working tree, all or nothing, record it, then
     remove the worktree. Refused with run.changes-conflict, changing nothing, when it doesn't
@@ -227,8 +254,10 @@ def keep(
         view.run_id,
         reason,
         lambda run: run.accept_changes(changes["diff"], list(files), approved_as=approved_as),
+        performance=performance_of(view),
         command=command,
         approved_as=approved_as,
+        ends=ends,
     )
     notices: list[m.NoticeData] = []
     try:
@@ -306,7 +335,13 @@ def _discard(
         changes = check(view)
         if not request.rehearse:
             remove_worktree(store.vcs, theatre, view.run_id, announce)
-            record_settling(store, view.run_id, request.reason, lambda run: run.discard_changes())
+            record_settling(
+                store,
+                view.run_id,
+                request.reason,
+                lambda run: run.discard_changes(),
+                performance=performance_of(view),
+            )
     return m.DiscardResult(
         run=view.run_id, worktree=changes["worktree"], rehearsed=bool(request.rehearse), notices=[]
     )

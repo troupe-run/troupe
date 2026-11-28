@@ -18,8 +18,14 @@ STDERR = "sha256:" + "c" * 64
 DIFF = "sha256:" + "d" * 64
 WORKTREE = ".troupe/worktrees/01JDXQ7Z3K"
 
+PERFORMANCE = "7a1c0d2e-0000-4000-8000-00000000000a"
+LINE = f"{PERFORMANCE}  run {RUN_ID[:8]}"
+"""How a list line starts: the performance, then its run by the first 8 characters."""
+
 ENDED: dict[str, Any] = {
     "runId": RUN_ID,
+    "performanceId": PERFORMANCE,
+    "step": 1,
     "actor": "tester",
     "startedBy": {"kind": "human", "id": "ada@example.com", "source": "git"},
     "runner": {"requested": "scripted", "reported": {"name": "fake-runner", "version": "1.2.3"}},
@@ -64,6 +70,7 @@ def test_the_summary_of_an_ended_worktree_run_with_every_line() -> None:
     )
     assert render_run(run) == [
         f"run {RUN_ID}",
+        f"  performance: {PERFORMANCE} (step 1)",
         "  actor: tester (now qa)",
         "  started by: ada@example.com at 2026-11-21T09:14:02.000Z",
         "  runner: scripted (fake-runner 1.2.3)",
@@ -110,6 +117,7 @@ def test_the_summary_of_a_running_theatre_run_started_by_no_one_known() -> None:
     )
     assert render_run(run) == [
         f"run {RUN_ID}",
+        f"  performance: {PERFORMANCE} (step 1)",
         "  actor: tester",
         "  started by: unknown at 2026-11-21T09:14:02.000Z",
         "  runner: scripted",
@@ -256,11 +264,11 @@ def test_a_run_with_no_audit_shows_none() -> None:
     [
         (
             {},
-            f"{RUN_ID}  failed               tester           2026-11-21T09:14:02.000Z  42 events",
+            f"{LINE}  failed               tester           2026-11-21T09:14:02.000Z  42 events",
         ),
         (
             {"actorNow": "qa", "events": 1},
-            f"{RUN_ID}  failed               tester (now qa)  2026-11-21T09:14:02.000Z  1 events",
+            f"{LINE}  failed               tester (now qa)  2026-11-21T09:14:02.000Z  1 events",
         ),
         (
             {
@@ -271,7 +279,7 @@ def test_a_run_with_no_audit_shows_none() -> None:
                     }
                 ]
             },
-            f"{RUN_ID}  failed               tester           2026-11-21T09:14:02.000Z  42 events, "
+            f"{LINE}  failed               tester           2026-11-21T09:14:02.000Z  42 events, "
             "1 notice",
         ),
     ],
@@ -292,7 +300,7 @@ def test_a_list_line_of_a_run_still_going_shows_its_state() -> None:
         transcriptFormat=None,
         audit=None,
     )
-    assert render_run_line(run).startswith(f"{RUN_ID}  running              tester ")
+    assert render_run_line(run).startswith(f"{LINE}  running              tester ")
 
 
 # Requirement: A run's summary shows its gate (spec: runs, cli; manual-gates)

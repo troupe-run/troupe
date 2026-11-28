@@ -168,6 +168,8 @@
             "troupe.core.runs.aggregate:Run.GatePassed",
             "troupe.core.runs.aggregate:Run.CueRaised",
             "troupe.core.runs.aggregate:Run.ChangesRejected",
+            "troupe.core.runs.performance:Performance.Started",
+            "troupe.core.runs.performance:Performance.Ended",
             "troupe.core.config.aggregate:Config.Changed",
             "troupe.core.config.aggregate:Config.Settled"
           ]
@@ -338,6 +340,38 @@
           "if": {
             "properties": {
               "topic": {
+                "const": "troupe.core.runs.performance:Performance.Started"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/performance-started.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
+                "const": "troupe.core.runs.performance:Performance.Ended"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/performance-ended.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
                 "const": "troupe.core.config.aggregate:Config.Changed"
               }
             }
@@ -396,6 +430,8 @@
               "troupe.core.runs.aggregate:Run.GatePassed",
               "troupe.core.runs.aggregate:Run.CueRaised",
               "troupe.core.runs.aggregate:Run.ChangesRejected",
+              "troupe.core.runs.performance:Performance.Started",
+              "troupe.core.runs.performance:Performance.Ended",
               "troupe.core.config.aggregate:Config.Changed",
               "troupe.core.config.aggregate:Config.Settled"
             ]

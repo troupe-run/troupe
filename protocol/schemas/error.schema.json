@@ -2147,6 +2147,108 @@
     {
       "properties": {
         "code": {
+          "const": "performance.out-of-sequence"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "performance"
+          ],
+          "properties": {
+            "performance": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "performance.several-runs"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "performance",
+            "runs"
+          ],
+          "properties": {
+            "performance": {
+              "type": "string",
+              "minLength": 1
+            },
+            "runs": {
+              "description": "The performance's runs, in the order they started: name one of them instead.",
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
+          "const": "run.recorded-before-performances"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "runs",
+            "remove",
+            "keep"
+          ],
+          "properties": {
+            "runs": {
+              "description": "Every run whose start names no performance, in the order they were first seen.",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "remove": {
+              "description": "The event files, relative to the theatre, that hold those runs' events and nothing else: removing them, and committing that, loses only those runs.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "keep": {
+              "description": "The event files, relative to the theatre, that hold those runs' events and other events too, such as config changes: removing one would lose those as well.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "details"
+      ]
+    },
+    {
+      "properties": {
+        "code": {
           "const": "run.not-ended"
         },
         "details": {

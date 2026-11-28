@@ -29,11 +29,11 @@ from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Send
 from troupe.core.client.session import Session
 from troupe.core.errors import TroupeError
-from troupe.core.events import EventStore
+from troupe.core.events import EventStore, RecordedEvent
 from troupe.core.notices import Notice
 from troupe.core.runs.aggregate import TOPICS
 from troupe.core.runs.backends import PERFORM_PID_FILE, Backends, lease_dir
-from troupe.core.runs.projections import Recording, RunView, fold_runs
+from troupe.core.runs.projections import RunView, fold_runs
 from troupe.platform import locks, processes
 from troupe.platform.errors import (
     LockAlreadyHeldError,
@@ -113,10 +113,10 @@ def state_notice(run_id: str, state: m.State) -> Notice | None:
     return None
 
 
-def _recordings(store: EventStore) -> Iterator[Recording]:
+def _recordings(store: EventStore, topics: tuple[str, ...] = TOPICS) -> Iterator[RecordedEvent]:
     low = 1
     while True:
-        page = store.recorder.notifications(low, _PAGE, None, TOPICS)
+        page = store.recorder.notifications(low, _PAGE, None, topics)
         if not page:
             return
         for _, recording in page:
@@ -125,19 +125,82 @@ def _recordings(store: EventStore) -> Iterator[Recording]:
 
 
 def read_runs(store: EventStore) -> dict[str, RunView]:
-    """Every run whose start is recorded, in the local order each was first seen."""
-    return {run_id: view for run_id, view in fold_runs(_recordings(store)).items() if view.visible}
+    """Every run whose start is recorded, in the local order each was first seen. A run whose
+    start names no performance was recorded before performances: reading refuses the store, naming
+    every such run and how to fix it (performances design D8)."""
+    runs = {run_id: view for run_id, view in fold_runs(_recordings(store)).items() if view.visible}
+    older = [run_id for run_id, view in runs.items() if view.performance is None]
+    if older:
+        raise _recorded_before_performances(store, older)
+    return runs
+
+
+def _recorded_before_performances(store: EventStore, older: list[str]) -> TroupeError:
+    """run.recorded-before-performances for ``older``: the event files holding their events, split
+    into those that hold nothing else (to remove and commit) and those that hold other events too
+    (to keep). troupe never removes them itself, and never reads such a run without a performance
+    (contributing/releasing.md, "Records an older troupe wrote")."""
+    theirs = {UUID(run_id) for run_id in older}
+    files: dict[Path, bool] = {}
+    """Each file holding one of their events, and whether it holds anything else."""
+    others: set[Path] = set()
+    for recording in _recordings(store, ()):
+        stream = recording.stream
+        if isinstance(stream, UUID) and stream in theirs:
+            files.setdefault(recording.path, False)
+        else:
+            others.add(recording.path)
+    shown = {path: _relative(store.theatre, path) for path in files}
+    remove = sorted(shown[path] for path in files if path not in others)
+    keep = sorted(shown[path] for path in files if path in others)
+    listed = ", ".join(run_id[:8] for run_id in older)
+    removing = (
+        f"remove {', '.join(remove)} and commit that, which loses only those runs"
+        if remove
+        else "no file holds only those runs, so none can be removed without losing other events"
+    )
+    kept = f" Keep {', '.join(keep)}: each holds other events too." if keep else ""
+    return TroupeError(
+        "run.recorded-before-performances",
+        problem=f"This theatre holds {len(older)} run(s) recorded before performances (troupe "
+        f"0.5.0): {listed}. This troupe doesn't read runs from before then, and doesn't change "
+        "them.",
+        fix="To read them, use a troupe before 0.5 (troupe-run<0.5). To go on without them, "
+        f"{removing}.{kept}",
+        details={"runs": older, "remove": remove, "keep": keep},
+    )
+
+
+def _relative(theatre: Path, path: Path) -> str:
+    try:
+        return path.resolve().relative_to(theatre.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def resolve(ref: str, runs: dict[str, RunView]) -> str:
-    """The run ``ref`` names: a full id, or a prefix of at least 8 hex digits matching one run."""
+    """The run ``ref`` names: a run's full id or a performance's, or a prefix of at least 8 hex
+    digits matching exactly one run or performance. A performance names its run when it has
+    exactly one; otherwise it's refused, listing its runs (spec: performances, "A performance id
+    names a run where a run id does")."""
+    performances: dict[str, list[str]] = {}
+    for run_id, view in runs.items():
+        if view.performance is not None:
+            performances.setdefault(view.performance, []).append(run_id)
     if ref in runs:
         return ref
-    matches = sorted(run_id for run_id in runs if run_id.startswith(ref))
+    if ref in performances:
+        return _the_run_of(ref, performances[ref])
+    matches = sorted(
+        {
+            *(run_id for run_id in runs if run_id.startswith(ref)),
+            *(performance for performance in performances if performance.startswith(ref)),
+        }
+    )
     if not matches:
         raise TroupeError(
             "run.not-found",
-            problem=f"No run here has an id starting {ref}.",
+            problem=f"No run or performance here has an id starting {ref}.",
             fix="Run `troupe status` to list the runs here. A run started in another clone "
             "arrives once it is committed and pulled.",
             details={"run": ref},
@@ -145,11 +208,28 @@ def resolve(ref: str, runs: dict[str, RunView]) -> str:
     if len(matches) > 1:
         raise TroupeError(
             "run.ambiguous-id",
-            problem=f"More than one run has an id starting {ref}: {', '.join(matches)}.",
-            fix="Give more of the run's id, enough to match one run.",
+            problem=f"More than one run or performance has an id starting {ref}: "
+            f"{', '.join(matches)}.",
+            fix="Give more of the id, enough to match one run or performance.",
             details={"run": ref, "matches": matches},
         )
-    return matches[0]
+    [match] = matches
+    if match in performances:
+        return _the_run_of(match, performances[match])
+    return match
+
+
+def _the_run_of(performance: str, run_ids: list[str]) -> str:
+    if len(run_ids) == 1:
+        return run_ids[0]
+    return_ids = ", ".join(run_ids)
+    raise TroupeError(
+        "performance.several-runs",
+        problem=f"Performance {performance} has {len(run_ids)} runs ({return_ids}), and this "
+        "needs one.",
+        fix="Name one of its runs instead, by its id or the first 8 characters of it.",
+        details={"performance": performance, "runs": run_ids},
+    )
 
 
 def _summary(

@@ -17,7 +17,18 @@ import pytest
 from gitrepo import Repo
 from run_changes_shared import call_discard
 from run_workspaces_shared import Recording, configured, write
-from runtesting import ADA, ALLOW, INIT, OK, Harness, committed, request, script, theatre
+from runtesting import (
+    ADA,
+    ALLOW,
+    INIT,
+    OK,
+    PERFORMANCE,
+    Harness,
+    committed,
+    request,
+    script,
+    theatre,
+)
 from troupe.core.client import messages as m
 from troupe.core.errors import TroupeError
 from troupe.core.runs.changes import accept, diff
@@ -138,9 +149,10 @@ def test_a_run_with_no_end_is_refused_as_not_ended(repo: Repo) -> None:
             "path": ".troupe/local/worktrees/0f8fad5b-d9cb-469f-a165-70867728950e",
         },
         on_context_full={"value": "fail", "source": "default"},
+        step=1,
         approvers={"value": ["troupe", "director"], "source": "default"},
     )
-    store.command(via="cli").record(other.collect_events())
+    store.command(via="cli", performance=PERFORMANCE).record(other.collect_events())
     with pytest.raises(TroupeError) as caught:
         call_diff(made, other.run_id)
     assert caught.value.code == "run.not-ended"
@@ -286,9 +298,10 @@ def test_discarding_an_interrupted_run_removes_its_worktree_and_records_the_disc
         config=started["config"],
         workspace={**started["workspace"], "path": f".troupe/local/worktrees/{other_id}"},
         on_context_full={"value": "fail", "source": "default"},
+        step=1,
         approvers={"value": ["troupe", "director"], "source": "default"},
     )
-    store.command(via="cli").record(interrupted.collect_events())
+    store.command(via="cli", performance=PERFORMANCE).record(interrupted.collect_events())
     (repo.path / ".troupe" / "local" / "runs" / other_id).mkdir(parents=True)  # a free lease
     worktree = worktree_path(repo.path, other_id)
     store.vcs.add_worktree(worktree, started["workspace"]["base"])

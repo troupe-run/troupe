@@ -75,14 +75,15 @@ no old records to read (2026-11-07).
 
 ### D3. When and by whom a performance's end is recorded
 
-The end is recorded in the same batch as the event that settles the performance. Its lineage is that of the command
-driving the performance: `perform`'s person command, or the `approve`/`reject` command.
+The end is recorded in the same batch as the event that settles the performance, by the command that records that
+event, with no approval: the approval belongs to the acceptance alone (spec: lineage). The run's end is the agent's,
+so with it the performance's end is `perform`'s person command's.
 
 | What happens | Batch |
 |---|---|
 | The run ends, and no gate follows: it failed, was cancelled, couldn't start, changed nothing, or ran in the theatre | the run's end (agent's lineage) + the performance's end (person's) |
 | The run ends, and a person comes first | the run's end + the cue; no performance end |
-| troupe keeps the work | troupe's acceptance (troupe's lineage, with its approval) + the performance's end (person's) |
+| troupe keeps the work | troupe's acceptance (troupe's lineage, with its approval) + the performance's end (troupe's, no approval) |
 | troupe passes | the pass + the cue; no performance end |
 | `approve` | the acceptance (approver's lineage, with the approval) + the performance's end, `completed` |
 | `reject` | the rejection + the performance's end, `rejected` |
@@ -162,7 +163,7 @@ Every caller already goes through `resolve`, so no command needs its own lookup.
   - perform's standard error first says `troupe: performance <id> (<actor>) starting`, then the run line as now.
   - Its standard output on success is `performance <id>: run <id> succeeded`.
   - Each status line starts with the performance's full id, then `run <first 8 of run id>`, then the line as now.
-  - `status <run>` adds `performance: <id> (step 1 of 1)`.
+  - `status <run>` adds `performance: <id> (step 1)`.
 
 Alternative: **give `StatusResult` a list of performance summaries holding runs, now.** Deferred to `actor-sequences`:
 until a performance has more than one run, the extra level would hold exactly the run summary, and its shape is

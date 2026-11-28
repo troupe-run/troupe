@@ -535,3 +535,68 @@ def test_an_event_stored_without_its_none_field_reads_back(tmp_path: Path) -> No
     loaded = service.load(note.id)
     assert isinstance(loaded, Note)
     assert loaded.text is None
+
+
+PERFORMANCE = "1a2b3c4d-0000-4000-8000-000000000000"
+
+
+def _run_started() -> list[Any]:
+    """A run's start, as a run's stream holds it: its topic is a run's, so it belongs to a
+    performance (spec: lineage, "Lineage names an event's performance")."""
+    from troupe.core.runs.aggregate import Run
+
+    run = Run(
+        run_id="5e6f7a8b-0000-4000-8000-000000000000",
+        actor="tester",
+        runner_requested="scripted",
+        stage=LOCAL.to_data(),
+        effect_check={"kind": "none"},
+        direction="sha256:" + "ab" * 32,
+        config=["sha256:" + "cd" * 32],
+        workspace={"kind": "theatre"},
+        on_context_full={"value": "fail", "source": "default"},
+        step=1,
+    )
+    return list(run.collect_events())
+
+
+def test_a_run_event_without_a_performance_is_refused_naming_it_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    service = files_service(tmp_path)
+    with pytest.raises(TroupeError) as caught:
+        service.command(via="cli", stage=LOCAL).record(_run_started())
+    assert caught.value.code == "events.lineage-invalid"
+    assert "performance" in caught.value.problem
+    assert snapshot(tmp_path) == {}
+
+
+def test_an_event_outside_a_performance_that_names_one_is_refused_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    service = files_service(tmp_path)
+    with pytest.raises(TroupeError) as caught:
+        service.command(via="cli", performance=PERFORMANCE).record(
+            Counter(value=1).collect_events()
+        )
+    assert caught.value.code == "events.lineage-invalid"
+    assert "performance" in caught.value.problem
+    assert snapshot(tmp_path) == {}
+
+
+def test_an_event_outside_a_performance_records_no_performance(tmp_path: Path) -> None:
+    service = files_service(tmp_path)
+    [recorded] = service.command(via="cli").record(Counter(value=1).collect_events())
+    assert "performance" not in lineage_of(tmp_path, recorded.event_id)
+
+
+def test_a_commands_performance_is_in_every_event_it_and_its_agent_record(
+    tmp_path: Path,
+) -> None:
+    service = files_service(tmp_path)
+    person = service.command(via="cli", stage=LOCAL, performance=PERFORMANCE)
+    agent = person.acting_as(TESTER, via="runner")
+    [started] = person.record(_run_started())
+    assert lineage_of(tmp_path, started.event_id)["performance"] == PERFORMANCE
+    assert agent.performance == PERFORMANCE
+    assert agent.lineage().performance == PERFORMANCE

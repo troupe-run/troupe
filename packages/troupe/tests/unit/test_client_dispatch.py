@@ -25,7 +25,7 @@ class Spy:
 
     async def __call__(self, request: Any, session: Session, send: Send) -> Message:  # noqa: ANN401
         self.calls.append(request)
-        send(m.Started(run_id=RUN_ID))
+        send(m.Started(run_id=RUN_ID, performance_id=RUN_ID, step=1))
         return m.StatusResult(runs=[], cues=[], notices=[])
 
 
@@ -68,7 +68,7 @@ def test_a_valid_request_reaches_its_handler_parsed_and_updates_and_result_retur
     spy, updates = Spy(), list[dict[str, Any]]()
     result = run("status", {"limit": 3}, spy, updates)
     assert spy.calls == [m.StatusRequest(limit=3)]
-    assert updates == [{"kind": "started", "runId": RUN_ID}]
+    assert updates == [{"kind": "started", "runId": RUN_ID, "performanceId": RUN_ID, "step": 1}]
     assert result == {"runs": [], "cues": [], "notices": []}
 
 

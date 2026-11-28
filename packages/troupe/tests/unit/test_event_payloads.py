@@ -15,9 +15,12 @@ import pytest
 from catalogues import branches
 from protocol_schemas import SCHEMAS, SCRIPTED, load, validator_for
 from troupe.core.config import aggregate as config_aggregate
+from troupe.core.runs import performance
 from troupe.core.runs.aggregate import (
     TOPICS,
 )
+
+PERFORMANCE = "1a2b3c4d-0000-4000-8000-000000000000"
 
 
 @pytest.mark.parametrize(
@@ -66,6 +69,7 @@ def test_an_end_that_contradicts_its_ending_does_not_validate(
             "cause": {"kind": "command", "id": "01K7ZX3N8V4Q2M6R9T5W1Y0B3C"},
             "approvals": [],
             "vcs": {"adapter": "files"},
+            "performance": PERFORMANCE,
         },
         "timestamp": {"_type_": "datetime_iso", "_data_": "2026-10-13T00:00:00+00:00"},
         "outcome": outcome,
@@ -91,6 +95,7 @@ def _ended(outcome: dict[str, Any]) -> dict[str, Any]:
             "cause": {"kind": "command", "id": "01K7ZX3N8V4Q2M6R9T5W1Y0B3C"},
             "approvals": [],
             "vcs": {"adapter": "files"},
+            "performance": PERFORMANCE,
         },
         "timestamp": {"_type_": "datetime_iso", "_data_": "2026-10-13T00:00:00+00:00"},
         "outcome": {
@@ -305,6 +310,34 @@ def test_an_ends_recording_validates_exactly_when_it_names_an_event_or_a_notice(
     assert validator_for(ended["$id"], SCRIPTED).is_valid(state) is valid
 
 
+# Requirement: The event schemas say which events name a performance (spec: lineage)
+
+
+def test_a_run_event_whose_lineage_names_no_performance_does_not_validate() -> None:
+    ended = load(SCHEMAS / "events" / "run-ended.schema.json")
+    state = _ended({"audit": {"outside": []}})
+    validator = validator_for(ended["$id"], SCRIPTED)
+    assert validator.is_valid(state)
+    del state["lineage"]["performance"]
+    assert not validator.is_valid(state)
+
+
+def test_a_config_event_whose_lineage_names_a_performance_does_not_validate() -> None:
+    changed = load(SCHEMAS / "events" / "config-changed.schema.json")
+    validator = validator_for(changed["$id"], SCRIPTED)
+    lineage = {**_ended({})["lineage"], "via": "cli"}
+    del lineage["performance"]
+    state = {
+        "lineage": lineage,
+        "timestamp": {"_type_": "datetime_iso", "_data_": "2026-10-13T00:00:00+00:00"},
+        "changes": [{"path": ["actors", "tester", "runner"], "after": "scripted"}],
+        "files": [],
+    }
+    assert validator.is_valid(state)
+    state["lineage"] = {**lineage, "performance": PERFORMANCE}
+    assert not validator.is_valid(state)
+
+
 # Requirement: Each event troupe defines has a payload schema (every topic has a schema)
 
 
@@ -315,7 +348,7 @@ def test_the_topics_troupe_records_and_the_topics_the_protocol_defines_are_the_s
         branch["if"]["properties"]["topic"]["const"]
         for branch in record["$defs"]["troupeEvent"]["allOf"]
     ]
-    assert set(defined) == set(chosen) == {*TOPICS, *config_aggregate.TOPICS}
+    assert set(defined) == set(chosen) == {*TOPICS, *performance.TOPICS, *config_aggregate.TOPICS}
 
 
 def test_each_payload_schema_names_its_topic_in_its_title() -> None:

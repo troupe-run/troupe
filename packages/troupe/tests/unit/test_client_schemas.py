@@ -15,6 +15,8 @@ OUTSIDE: dict[str, Any] = {"path": "src/a.py", "change": "modified", "needs": "w
 PERFORM: dict[str, Any] = {"actor": "tester", "direction": "say hello", "rehearse": False}
 SUMMARY: dict[str, Any] = {
     "runId": RUN_ID,
+    "performanceId": "7a1c0d2e-0000-4000-8000-00000000000a",
+    "step": 1,
     "actor": "tester",
     "startedBy": {"kind": "human", "id": "ada@example.com", "source": "vcs"},
     "runner": {"requested": "scripted", "reported": {"name": "scripted", "version": "0.1.0"}},
@@ -171,7 +173,20 @@ ACCEPTED = [
         },
         "a rehearsal",
     ),
-    ("perform-update.schema.json", {"kind": "started", "runId": RUN_ID}, "started"),
+    (
+        "perform-update.schema.json",
+        {"kind": "started", "runId": RUN_ID, "performanceId": RUN_ID, "step": 1},
+        "started",
+    ),
+    (
+        "perform-update.schema.json",
+        {
+            "kind": "performance-started",
+            "performanceId": RUN_ID,
+            "performed": {"kind": "actor", "name": "tester"},
+        },
+        "a performance started",
+    ),
     ("perform-update.schema.json", EVENT, "an event"),
     (
         "perform-update.schema.json",

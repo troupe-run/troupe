@@ -89,6 +89,8 @@ ESTIMATED_USAGE = {
 RUN_ID = "0193a4c2-7f1e-7b55-9c1d-2a6f0e3b8d41"
 SUMMARY: dict[str, Any] = {
     "runId": RUN_ID,
+    "performanceId": "7a1c0d2e-0000-4000-8000-00000000000a",
+    "step": 1,
     "actor": "tester",
     "startedBy": {"kind": "unknown"},
     "runner": {"requested": "scripted"},

@@ -220,11 +220,21 @@ def test_a_later_config_change_doesnt_change_the_version_a_run_recorded(tmp_path
     assert len(config_events) == 2
 
 
-def test_updates_are_the_run_id_first_then_each_event_as_recorded(tmp_path: Path) -> None:
+def test_updates_are_the_performance_then_the_run_id_then_each_event_as_recorded(
+    tmp_path: Path,
+) -> None:
     harness = Harness(theatre(tmp_path))
     result = harness.perform(request(script(INIT, turn("one"), OK)))
     run_id = result.run.run_id
-    assert harness.updates[0] == {"kind": "started", "runId": run_id}
+    performance = result.run.performance_id
+    assert harness.updates[:2] == [
+        {
+            "kind": "performance-started",
+            "performanceId": performance,
+            "performed": {"kind": "actor", "name": "tester"},
+        },
+        {"kind": "started", "runId": run_id, "performanceId": performance, "step": 1},
+    ]
     events = [u for u in harness.updates if u["kind"] == "event"]
     assert [(u["runId"], u["seq"], u["event"]["type"]) for u in events] == [
         (run_id, 0, "init"),

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/events/performance-ended.schema.json",
+  "title": "Performance.Ended",
+  "description": "The payload of a performance's end (topic troupe.core.runs.performance:Performance.Ended): nothing more will happen in it. Recorded in the same batch as the event that settled it: its run's end, troupe's acceptance at the gate, or a person's answer. At most one. Absent: the performance's work waits at a gate, or its perform stopped without an end.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lineage",
+    "timestamp",
+    "outcome"
+  ],
+  "properties": {
+    "lineage": {
+      "allOf": [
+        {
+          "$ref": "../lineage.schema.json"
+        },
+        {
+          "required": [
+            "performance"
+          ]
+        }
+      ],
+      "description": "Its lineage names the performance (spec: lineage, \"Lineage names an event's performance\")."
+    },
+    "timestamp": {
+      "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
+    },
+    "outcome": {
+      "description": "How it ended: completed when every step ran and its work was kept or there was none, failed when a step didn't succeed, rejected when its work was rejected at a gate, cancelled when a step was cancelled.",
+      "enum": [
+        "completed",
+        "failed",
+        "rejected",
+        "cancelled"
+      ]
+    }
+  }
+}

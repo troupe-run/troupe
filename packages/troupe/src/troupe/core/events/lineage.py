@@ -19,6 +19,8 @@ Via = Literal["cli", "file", "runner", "server"]
 HASH = re.compile(r"^sha256:[0-9a-f]{64}$")
 ULID = re.compile(r"^[0-9A-HJKMNP-TV-Z]{26}$")
 TIME = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$")
+PERFORMANCE_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+"""A performance's id: a UUID in canonical lowercase form (spec: performances)."""
 
 
 @dataclass(frozen=True)
@@ -172,6 +174,9 @@ class Lineage:
     approvals: tuple[Approval, ...] = field(default=())
     stage: StageLineage | None = None
     """None for an event recorded outside a stage."""
+    performance: str | None = None
+    """The id of the performance the event belongs to; None for an event outside any performance
+    (spec: lineage, "Lineage names an event's performance"; performances design D4)."""
 
     def to_data(self) -> dict[str, Any]:
         data: dict[str, Any] = {
@@ -189,6 +194,8 @@ class Lineage:
             data["reason"] = self.reason
         if self.stage is not None:
             data["stage"] = self.stage.to_data()
+        if self.performance is not None:
+            data["performance"] = self.performance
         return data
 
 
@@ -199,6 +206,27 @@ def timestamp(moment: datetime) -> str:
     return f"{utc.year:04d}-" + utc.strftime("%m-%dT%H:%M:%S.") + f"{utc.microsecond // 1000:03d}Z"
 
 
+PERFORMANCE_TOPICS = (
+    "troupe.core.runs.aggregate:Run.",
+    "troupe.core.runs.performance:Performance.",
+)
+"""The topic prefixes of the events that belong to a performance: a run's and a performance's.
+Each of them names its performance in its lineage, and no other event does (spec: lineage,
+"Lineage names an event's performance"; performances design D4). The event schemas say the same,
+topic by topic."""
+
+
+def performance_problem(topic: str, data: Mapping[str, Any]) -> str | None:
+    """What is wrong with lineage ``data`` for an event of ``topic`` by the performance rule:
+    a run's or a performance's event without ``performance``, or any other event with one."""
+    belongs = topic.startswith(PERFORMANCE_TOPICS)
+    if belongs and "performance" not in data:
+        return "performance is missing: every run and performance event names its performance"
+    if not belongs and "performance" in data:
+        return "performance must be left out: only run and performance events name a performance"
+    return None
+
+
 # Checking lineage data by hand, by the schema's rules. Each check returns the first problem.
 
 
@@ -206,7 +234,7 @@ def lineage_problem(data: object) -> str | None:
     """What is wrong with ``data`` as lineage, naming the field, or None if it is valid."""
     if not isinstance(data, Mapping):
         return "lineage must be an object"
-    problem = _fields("lineage", set(data), _LINEAGE_REQUIRED, {"reason", "stage"})
+    problem = _fields("lineage", set(data), _LINEAGE_REQUIRED, {"reason", "stage", "performance"})
     if problem:
         return problem
     checks = (
@@ -221,6 +249,11 @@ def lineage_problem(data: object) -> str | None:
         _approvals_problem(data["approvals"]),
         _vcs_problem(data["vcs"]),
         _stage_problem(data["stage"]) if "stage" in data else None,
+        _match(
+            "performance", data["performance"], PERFORMANCE_ID, "a UUID in canonical lowercase form"
+        )
+        if "performance" in data
+        else None,
     )
     return next((problem for problem in checks if problem), None)
 

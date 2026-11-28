@@ -20,6 +20,9 @@ theatre's history can answer: who did this, through what, when, why, as part of 
 - **`change`:** the id of the command that started it. Every event that follows from one command carries the same
   change id, including events recorded in reaction to it, so you can gather everything one command caused.
 - **`cause`:** what made it happen: the command itself, or the event it reacted to.
+- **`performance`:** the [performance](performances-and-runs.md) the event is part of. Every event of a run, and of
+  its performance, names it, whoever recorded it, including an approval or an accept given later. An event that isn't
+  part of a performance, such as a config change, has none.
 - **`approvals`:** who approved it, and in which role. Only the event that keeps a run's work at a
   [gate](gates-and-decisions.md) has one: troupe's own, in role `troupe`, when the changes applied cleanly, or a
   person's, in role `director`, when they approved it. Every other event's is empty.

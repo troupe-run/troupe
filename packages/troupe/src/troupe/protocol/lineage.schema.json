@@ -36,6 +36,10 @@
     "stage": {
       "$ref": "#/$defs/stage",
       "description": "Absent: the event was recorded outside a stage, such as by a person's command."
+    },
+    "performance": {
+      "$ref": "#/$defs/performanceId",
+      "description": "The performance the event belongs to: every event in a performance's stream or a run's stream names one, whoever recorded it. Absent: the event isn't part of any performance, such as a config change. Each event's own schema says which."
     }
   },
   "$defs": {
@@ -50,6 +54,12 @@
       "description": "A ULID: 26 characters of Crockford base32, sortable by time.",
       "type": "string",
       "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "performanceId": {
+      "title": "Performance id",
+      "description": "A performance's id: a UUID in canonical lowercase form, minted by the perform that started it.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
     },
     "timestamp": {
       "title": "Time",

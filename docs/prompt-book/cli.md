@@ -27,12 +27,15 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
   run starts quickly. The notice `runner.warming-up` says it has started; then `runner.warmed-up` says it's done,
   `runner.warm-up-cut-off` that it took longer than two minutes and the first run will finish it, or
   `runner.warm-up-failed` why the runner can't run here.
-- **`troupe perform`** runs one actor, as config defines it, and records the run. Progress goes to standard error;
-  on success, standard output gets `run <id> succeeded`, and when a run fails, standard error gets why, with its id.
-  It exits by the run's outcome: 0 succeeded, 130 cancelled with Ctrl-C, 1 otherwise.
-- **`troupe status`** lists the most recent runs, newest first, each with its cost when it has one, or shows one
-  run, with the tokens it used and its cost, what the audit of its changes found beside its outcome, and the notices
-  troupe raised while it went. A cost says whether the service reported it or it's estimated from the runtime's
+- **`troupe perform`** runs one actor, as config defines it, and records the run as the one step of a new
+  performance. Progress goes to standard error, starting with the performance's id and then the run's; on success,
+  standard output gets `performance <id>: run <id> succeeded`, and when a run fails, standard error gets why, with
+  its id. Wherever a command takes a run, its performance's id works too. It exits by the run's outcome: 0
+  succeeded, 130 cancelled with Ctrl-C, 1 otherwise.
+- **`troupe status`** lists the most recent performances, newest first, each line starting with the performance's
+  id and then its run's first 8 characters, with its cost when it has one, or shows one run, with its performance,
+  the tokens it used and its cost, what the audit of its changes found beside its outcome, and the notices troupe
+  raised while it went. A cost says whether the service reported it or it's estimated from the runtime's
   price (`~$0.0136, estimated`); a figure the runner didn't report isn't shown.
 - **`troupe logs`** shows a run's events and the notices troupe raised while it went, in order, with the tokens and
   cost on the result's line, then its outcome and its audit; `--follow` waits for more until the run ends.
@@ -157,7 +160,7 @@ troupe perform <actor> [--direction <direction>] [--rehearse]
 
 ### `troupe status`
 
-Show the most recent runs, or one run.
+Show the most recent performances, or one run.
 
 ```text
 troupe status [<run>] [--limit <limit>] [--json]
@@ -165,8 +168,8 @@ troupe status [<run>] [--limit <limit>] [--json]
 
 | Argument | Required | What it is |
 |---|---|---|
-| `<run>` | No | A run's id, or at least its first 8 characters |
-| `--limit <limit>` | No | How many runs to list, newest first |
+| `<run>` | No | A run's id, or its performance's, or at least the first 8 characters of either |
+| `--limit <limit>` | No | How many performances to list, newest first |
 | `--json` | No | Print the result as JSON |
 
 ### `troupe logs`
@@ -179,7 +182,7 @@ troupe logs <run> [--follow] [--json]
 
 | Argument | Required | What it is |
 |---|---|---|
-| `<run>` | Yes | A run's id, or at least its first 8 characters |
+| `<run>` | Yes | A run's id, or its performance's, or at least the first 8 characters of either |
 | `--follow` | No | Wait for new events and notices until the run ends |
 | `--json` | No | Print updates and the result as JSON |
 
@@ -193,7 +196,7 @@ troupe diff <run> [--json]
 
 | Argument | Required | What it is |
 |---|---|---|
-| `<run>` | Yes | A run's id, or at least its first 8 characters |
+| `<run>` | Yes | A run's id, or its performance's, or at least the first 8 characters of either |
 | `--json` | No | Print the result as JSON |
 
 ### `troupe accept`
@@ -206,7 +209,7 @@ troupe accept <run> [--reason <reason>] [--rehearse]
 
 | Argument | Required | What it is |
 |---|---|---|
-| `<run>` | Yes | A run's id, or at least its first 8 characters |
+| `<run>` | Yes | A run's id, or its performance's, or at least the first 8 characters of either |
 | `--reason <reason>` | No | Why, recorded in the lineage |
 | `--rehearse` | No | Check that the changes apply cleanly and name the files, changing nothing |
 
@@ -220,7 +223,7 @@ troupe discard <run> [--reason <reason>] [--rehearse]
 
 | Argument | Required | What it is |
 |---|---|---|
-| `<run>` | Yes | A run's id, or at least its first 8 characters |
+| `<run>` | Yes | A run's id, or its performance's, or at least the first 8 characters of either |
 | `--reason <reason>` | No | Why, recorded in the lineage |
 | `--rehearse` | No | Name the worktree that would be removed, removing nothing |
 
@@ -234,7 +237,7 @@ troupe approve <run> [--reason <reason>] [--rehearse]
 
 | Argument | Required | What it is |
 |---|---|---|
-| `<run>` | Yes | A run's id, or at least its first 8 characters |
+| `<run>` | Yes | A run's id, or its performance's, or at least the first 8 characters of either |
 | `--reason <reason>` | No | Why, recorded in the lineage |
 | `--rehearse` | No | Check the cue is open and the changes apply cleanly, and name the files, changing nothing |
 
@@ -248,7 +251,7 @@ troupe reject <run> [--reason <reason>] [--rehearse]
 
 | Argument | Required | What it is |
 |---|---|---|
-| `<run>` | Yes | A run's id, or at least its first 8 characters |
+| `<run>` | Yes | A run's id, or its performance's, or at least the first 8 characters of either |
 | `--reason <reason>` | No | Why, recorded in the lineage |
 | `--rehearse` | No | Name the worktree that would be removed, removing nothing |
 

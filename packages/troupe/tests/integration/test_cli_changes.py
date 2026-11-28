@@ -13,7 +13,7 @@ import pytest
 from cli_runs_shared import cli, configure
 from client_schemas import check
 from gitrepo import AUTHOR, Repo
-from runtesting import ADA, ALLOW, INIT, OK, script, theatre
+from runtesting import ADA, ALLOW, INIT, OK, script, succeeded_run, theatre
 from troupe.core.exit_codes import ExitCode
 
 WRITE = {"writeFile": {"path": "src/a.txt", "content": "two\n"}}
@@ -32,7 +32,8 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Repo:
 
 
 FAIL = {"event": {"type": "result", "status": "error", "reason": "other", "message": "no"}}
-RUN_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+RUN_ID = re.compile(r"troupe: run ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})")
+"""perform's line naming the run, after the line naming its performance."""
 
 
 def performed(repo: Repo) -> tuple[str, str]:
@@ -45,7 +46,7 @@ def performed(repo: Repo) -> tuple[str, str]:
     assert code == ExitCode.FAILURE, err
     found = RUN_ID.search(err)
     assert found is not None, err
-    return found.group(0), err
+    return found.group(1), err
 
 
 def test_perform_names_the_worktree_and_says_how_to_settle_the_changes(repo: Repo) -> None:
@@ -171,7 +172,7 @@ def test_a_clean_run_is_kept_by_troupe_and_a_waiting_one_rejected_leaving_the_fi
     repo.commit_all("config")
     code, out, err = cli("perform", "tester")
     assert code == ExitCode.OK, err
-    first = out.split()[1]
+    first = succeeded_run(out)
     assert (repo.path / "src" / "a.txt").read_text(encoding="utf-8") == "two\n"
     assert (repo.path / "new.txt").read_text(encoding="utf-8") == "new\n"
     code, out, _ = cli("status", first[:8])
@@ -189,7 +190,7 @@ def test_a_clean_run_is_kept_by_troupe_and_a_waiting_one_rejected_leaving_the_fi
     repo.commit_all("wait for a person")
     code, out, err = cli("perform", "tester")
     assert code == ExitCode.WAITING, err
-    second = out.split()[1]
+    second = succeeded_run(out)
     assert (repo.path / "src" / "a.txt").read_text(encoding="utf-8") == "two\n"
     assert cli("reject", second[:8], "--reason", "not yet")[0] == ExitCode.OK
     assert (repo.path / "src" / "a.txt").read_text(encoding="utf-8") == "two\n"

@@ -17,11 +17,18 @@ import pytest
 
 from cli_core_stand_in import StandIn, stand_in
 from troupe.cli.render import render_event
-from troupe.core.client.messages import LoggedEvent, NoticeUpdate, PerformResult, Started
+from troupe.core.client.messages import (
+    LoggedEvent,
+    NoticeUpdate,
+    PerformanceStarted,
+    PerformResult,
+    Started,
+)
 from troupe.core.exit_codes import ExitCode
 
 RUN_ID = "57468ead-167b-4c35-887e-1af08e16144c"
 SHORT = "57468ead"
+PERFORMANCE = "7a1c0d2e-0000-4000-8000-00000000000a"
 BASE = "06e610bf0077235089a2da29b9fbc7fafd000c2a"
 WORKTREE = f".troupe/local/worktrees/{RUN_ID}"
 EMPTY = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -42,6 +49,8 @@ PENDING = {
 }
 RUN: dict[str, Any] = {
     "runId": RUN_ID,
+    "performanceId": PERFORMANCE,
+    "step": 1,
     "actor": "lead",
     "startedBy": {"kind": "human", "id": "ada@example.com", "source": "vcs"},
     "runner": {"requested": "scripted", "reported": {"name": "scripted", "version": "0.2.0"}},
@@ -154,7 +163,7 @@ def _run(**fields: Any) -> PerformResult:  # noqa: ANN401
 
 
 def _started(*, worktree: bool = True) -> Started:
-    data = {"kind": "started", "runId": RUN_ID}
+    data = {"kind": "started", "runId": RUN_ID, "performanceId": PERFORMANCE, "step": 1}
     return Started.from_data({**data, "worktree": WORKTREE} if worktree else data)
 
 
@@ -183,7 +192,7 @@ def test_a_succeeded_worktree_run_shows_its_updates_then_how_to_settle_it(core: 
     core.reply("perform", _run(), _started(), *_events())
     ran = core.run("perform", "lead", "--direction", "go")
     assert ran.code == ExitCode.OK
-    assert ran.out == [f"run {RUN_ID} succeeded"]
+    assert ran.out == [f"performance {PERFORMANCE}: run {RUN_ID} succeeded"]
     assert ran.err == [
         STARTING,
         IN_WORKTREE,
@@ -199,7 +208,7 @@ def test_a_run_in_the_theatre_names_no_worktree_and_no_next_step(core: StandIn) 
     core.reply("perform", _in_theatre(), _started(worktree=False))
     ran = core.run("perform", "lead")
     assert ran.err == [STARTING]
-    assert ran.out == [f"run {RUN_ID} succeeded"]
+    assert ran.out == [f"performance {PERFORMANCE}: run {RUN_ID} succeeded"]
 
 
 def test_a_notice_sent_while_the_run_goes_is_shown_on_standard_error(core: StandIn) -> None:
@@ -370,7 +379,7 @@ def test_a_run_kept_at_its_gate_names_the_files_and_who_approved_and_exits_0(
     core.reply("perform", _run(changes=kept, gate=gate), _started())
     ran = core.run("perform", "lead")
     assert ran.code == ExitCode.OK
-    assert ran.out == [f"run {RUN_ID} succeeded"]
+    assert ran.out == [f"performance {PERFORMANCE}: run {RUN_ID} succeeded"]
     assert ran.err[-1] == (
         f"troupe: run {SHORT}'s changes were kept, approved by troupe, unstaged: AUDITION.md."
     )
@@ -394,7 +403,7 @@ def test_a_run_waiting_after_a_conflict_says_it_succeeded_names_the_role_files_a
     ran = core.run("perform", "lead")
     assert ran.code == ExitCode.WAITING
     assert int(ran.code) == 4
-    assert ran.out == [f"run {RUN_ID} succeeded"]
+    assert ran.out == [f"performance {PERFORMANCE}: run {RUN_ID} succeeded"]
     assert ran.err[-1] == (
         f"troupe: run {SHORT} succeeded, and its work waits at its gate for director because "
         "src/a.txt conflicts with your files: exit 4 means waiting for director, not failure. "
@@ -427,3 +436,17 @@ def test_a_rehearsal_shows_the_approvers_it_would_use(core: StandIn) -> None:
     core.reply("perform", PerformResult.from_data({"rehearsal": rehearsal}))
     ran = core.run("perform", "lead", "--rehearse")
     assert "  approvers: troupe, director (default)" in ran.out
+
+
+def test_a_performance_is_named_before_its_run_on_standard_error(core: StandIn) -> None:
+    started = PerformanceStarted.from_data(
+        {
+            "kind": "performance-started",
+            "performanceId": PERFORMANCE,
+            "performed": {"kind": "actor", "name": "lead"},
+        }
+    )
+    core.reply("perform", _in_theatre(), started, _started(worktree=False))
+    ran = core.run("perform", "lead")
+    assert ran.err == [f"troupe: performance {PERFORMANCE} (lead) starting", STARTING]
+    assert ran.out == [f"performance {PERFORMANCE}: run {RUN_ID} succeeded"]

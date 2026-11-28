@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from event_schemas import ENFORCED, LINEAGE, UNENFORCED_LOCAL, is_valid, lineage, without
+from event_schemas import ENFORCED, LINEAGE, ULID, UNENFORCED_LOCAL, is_valid, lineage, without
 from troupe.core.events.lineage import (
     VIA,
     Actor,
@@ -184,6 +184,11 @@ INVALID += [
     lineage(stage={**UNENFORCED_LOCAL, "allowedBy": {"setting": "Allow", "source": "env"}}),
     lineage(stage={**UNENFORCED_LOCAL, "allowedBy": {"setting": "x", "source": ""}}),
     lineage(stage="local"),
+    lineage(performance=None),
+    lineage(performance=""),
+    lineage(performance="1A2B3C4D-0000-4000-8000-000000000000"),
+    lineage(performance="1a2b3c4d00004000800000000000000"),
+    lineage(performance=ULID),
 ]
 
 
@@ -200,6 +205,7 @@ def test_the_hand_written_check_refuses_exactly_what_the_schema_refuses(
     [
         pytest.param(lineage(reason=None), "reason", id="reason"),
         pytest.param(lineage(stage=None), "stage", id="stage"),
+        pytest.param(lineage(performance=None), "performance", id="performance"),
         pytest.param(lineage(stage={**ENFORCED, "allowedBy": None}), "stage", id="allowedBy"),
         pytest.param(lineage(vcs={"adapter": "git", "branch": None}), "vcs.branch", id="branch"),
         pytest.param(lineage(vcs={"adapter": "git", "head": None}), "vcs.head", id="head"),
@@ -236,6 +242,7 @@ def test_a_lineage_with_nothing_optional_to_say_leaves_those_fields_out() -> Non
     ).to_data()
     assert "reason" not in data
     assert "stage" not in data
+    assert "performance" not in data
     assert data["vcs"] == {"adapter": "files"}
     assert is_valid(data, "lineage.schema.json")
     assert lineage_problem(data) is None
@@ -346,3 +353,29 @@ def test_lineage_with_troupes_own_approval_validates() -> None:
     assert data["actor"] == {"kind": "system", "id": "core@build-01"}
     assert is_valid(data, "lineage.schema.json")
     assert lineage_problem(data) is None
+
+
+PERFORMANCE = "1a2b3c4d-0000-4000-8000-000000000000"
+
+
+def test_a_lineage_naming_its_performance_writes_it_and_validates() -> None:
+    change = new_ulid()
+    built = build(ACTORS[1], "runner", CommandCause(change), None, change, STAGES[1])
+    data = Lineage(
+        actor=built.actor,
+        via=built.via,
+        at=built.at,
+        reason=None,
+        change=change,
+        cause=built.cause,
+        vcs=built.vcs,
+        stage=built.stage,
+        performance=PERFORMANCE,
+    ).to_data()
+    assert data["performance"] == PERFORMANCE
+    assert is_valid(data, "lineage.schema.json")
+    assert lineage_problem(data) is None
+
+
+def test_the_hand_written_check_names_a_malformed_performance() -> None:
+    assert "performance" in (lineage_problem(lineage(performance="not-a-uuid")) or "")

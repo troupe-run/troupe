@@ -13,7 +13,19 @@
   ],
   "properties": {
     "lineage": {
-      "$ref": "../lineage.schema.json"
+      "allOf": [
+        {
+          "$ref": "../lineage.schema.json"
+        },
+        {
+          "not": {
+            "required": [
+              "performance"
+            ]
+          }
+        }
+      ],
+      "description": "Its lineage names no performance: a config event isn't part of one."
     },
     "timestamp": {
       "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"

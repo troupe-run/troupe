@@ -92,8 +92,9 @@ troupe perform lead --direction "Write NOTES.md: what this code is for, in a few
 `lead` is the actor's name, and troupe takes the rest from config. Add `--rehearse` to see what would run without
 starting anything.
 
-While it runs, troupe shows its progress on standard error. When it succeeds, standard output gets one line,
-`run <id> succeeded`.
+While it runs, troupe shows its progress on standard error, starting with the
+[performance](../the-company/performances-and-runs.md)'s id, then the run's. When it succeeds, standard output gets
+one line, `performance <id>: run <id> succeeded`. Either id works wherever troupe asks for a run.
 
 The run worked in its own git worktree, under `.troupe/local/worktrees/`, so your files haven't changed yet:
 `NOTES.md` is in the worktree, not beside your files. That's a worktree's whole point: you see what an actor did

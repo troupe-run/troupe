@@ -224,7 +224,10 @@ errors and notices (`run.silent`, `run.retrying`, `run.estimate-dropped`) in
 | `run.out-of-sequence` | A run event isn't the next one its run expects, or a run event or notice arrived after the run ended: a fault, never retried |
 | `run.recording-failed` | A run event, a notice raised for the run, or the run's end, couldn't be recorded, so the run was stopped |
 | `run.not-found` | No run here has an id starting with what was given |
-| `run.ambiguous-id` | More than one run's id starts with what was given; it lists them |
+| `run.ambiguous-id` | More than one run or performance has an id starting with what was given; it lists them |
+| `performance.several-runs` | A performance id was given where one run is meant, and the performance has more than one run; it lists them |
+| `performance.out-of-sequence` | A performance's end was recorded after it had already ended: a fault, never retried |
+| `run.recorded-before-performances` | The theatre holds runs recorded before performances, which this troupe doesn't read; it lists them, the event files that hold only them (to remove and commit) and those that hold other events too (to keep), or says to read them with a troupe before 0.5 |
 | `run.not-ended` | A run's changes can't be shown or accepted, or a running run discarded, before its end is recorded |
 | `run.no-changes` | A worktree run changed nothing, so there's nothing to accept; discard removes its worktree |
 | `run.changes-uncaptured` | A worktree run's changes weren't captured (it was interrupted, or capturing failed), so they can't be accepted; it names the worktree |
