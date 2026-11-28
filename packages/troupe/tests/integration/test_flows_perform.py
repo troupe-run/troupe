@@ -245,6 +245,39 @@ def test_a_step_that_changes_nothing_reaches_no_gate_and_the_next_goes_on(repo: 
     assert (repo.path / "src" / "a.txt").read_text(encoding="utf-8") == "written\n"
 
 
+@pytest.mark.parametrize("approvers", [None, ["director"]], ids=["troupe first", "person first"])
+def test_a_middle_step_that_changes_nothing_reaches_no_gate_and_the_last_step_runs(
+    repo: Repo, approvers: list[str] | None
+) -> None:
+    before = (repo.path / "src" / "a.txt").read_bytes()
+    made = _Watching(repo)
+    actor(made, "writer", INIT, write("src/a.txt", "written\n"), OK)
+    actor(made, "looker", INIT, OK)
+    actor(made, "tester", INIT, write("src/c.txt", "tested\n"), OK)
+    looker: dict[str, Any] = {"actor": "looker"}
+    if approvers is not None:
+        looker["approvers"] = approvers
+    flow(made, "look", [{"actor": "writer"}, looker, {"actor": "tester"}])
+    last = run_flow(made, "look")
+    _, middle, third = runs_of(made, last.performance_id)
+    assert last.run_id == third
+    # Nothing reached the person's files before the last step ran.
+    assert made.theatre == [before, before, before]
+    middle_events = events(made, middle)
+    topics = [t for t, _ in middle_events]
+    assert "Run.ChangesApproved" not in topics
+    assert "Run.CueRaised" not in topics
+    assert "sofar" not in dict(middle_events)["Run.Ended"]["changes"]
+    # The last step was built on the writer's work, and its gate landed both.
+    [(_, started), *_] = events(made, third)
+    assert started["workspace"]["builtOn"] == middle
+    assert (repo.path / "src" / "a.txt").read_text(encoding="utf-8") == "written\n"
+    assert (repo.path / "src" / "c.txt").read_text(encoding="utf-8") == "tested\n"
+    *_, (ended, end) = events(made, last.performance_id)
+    assert ended == "Performance.Ended"
+    assert end["outcome"] == "completed"
+
+
 def test_a_person_first_between_steps_stops_the_flow_waiting_at_that_steps_gate(
     repo: Repo,
 ) -> None:

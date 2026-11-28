@@ -608,6 +608,8 @@ async def _troupes_turn(
     if (
         approvers is None
         or changes is None
+        # Before a flow's last step, the gate was settled with the step's end, or not reached.
+        or not step.position.last
         or not gate.reaches_gate(outcome, changes)
         or gate.first_is_a_person(approvers.value)
     ):

@@ -29,6 +29,7 @@ from troupe.core.runs.plan import (
     ContextFull,
     PerformanceStart,
     Performed,
+    StepPosition,
     _approvers_data,
     _StepPlan,
     _What,
@@ -91,6 +92,24 @@ def _settle(entry: _Entry, at: str | None, error: BaseException | None = None) -
 
 _DRAIN = _Entry()
 """Tells the writer every entry before it is recorded, so the end can follow."""
+
+
+def _own(
+    changes: dict[str, Any] | None, outcome: str | None, position: StepPosition
+) -> dict[str, Any] | None:
+    """A run's changes as its end records them. A flow's step before the last that succeeded
+    changing nothing records no diff so far either: it changed nothing, reaches no gate, and the
+    next step is built on the work before it (spec: flows, "Before the last step, approving lets the
+    work go on"). A step that stopped the flow keeps it, so the flow can be settled whole."""
+    if (
+        changes is None
+        or position.last
+        or outcome != "succeeded"
+        or "diff" in changes
+        or "sofar" not in changes
+    ):
+        return changes
+    return {key: value for key, value in changes.items() if key != "sofar"}
 
 
 class _Recorder:
@@ -326,6 +345,7 @@ class _Recorder:
             self.run = loaded
         run = self._run()
         recording = self.failure.to_data() if self.failure is not None else None
+        changes = _own(changes, outcome.get("outcome"), self.step.position)
         run.end(outcome, recording, changes)
         ended = run.collect_events()
         approvers = self.step.approvers
