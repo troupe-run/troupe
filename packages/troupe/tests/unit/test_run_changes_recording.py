@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 import pytest
 
 from protocol_schemas import PROTOCOL_BASE, validator_for
-from runtesting import STAGE, outcome
+from runtesting import PERFORMANCE, STAGE, outcome
 from storetesting import files_service
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
@@ -41,6 +41,7 @@ def new_run(workspace: dict[str, Any] = WORKTREE) -> Run:
         config=["sha256:" + "b" * 64],
         workspace=workspace,
         on_context_full={"value": "fail", "source": "default"},
+        step=1,
         approvers=(
             {"value": ["troupe", "director"], "source": "default"}
             if workspace.get("kind") == "worktree"
@@ -50,7 +51,7 @@ def new_run(workspace: dict[str, Any] = WORKTREE) -> Run:
 
 
 def record(store: EventStore, run: Run) -> None:
-    store.command(via="cli").record(run.collect_events())
+    store.command(via="cli", performance=PERFORMANCE).record(run.collect_events())
 
 
 def changes_of(store: EventStore, run: Run) -> dict[str, Any] | None:

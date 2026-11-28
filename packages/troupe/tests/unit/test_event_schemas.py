@@ -29,7 +29,7 @@ EVENT: dict[str, Any] = {
     "topic": "troupe.core.runs.aggregate:Run.Reported",
     "parents": [],
     "state": {
-        "lineage": LINEAGE,
+        "lineage": lineage(performance="6c1e2a3b-0000-4000-8000-000000000002"),
         "timestamp": {"_type_": "datetime_iso", "_data_": "2026-10-12T03:04:05.678000+00:00"},
         "seq": 0,
         "event": {

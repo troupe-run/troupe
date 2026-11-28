@@ -2,6 +2,7 @@
 called in process with the scripted runner (perform-status-logs)."""
 
 import asyncio
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -194,7 +195,9 @@ def failing_at(reported: int, *, end_too: bool = False) -> Any:  # noqa: ANN401
     fails as a full disk would."""
 
     def wrap(store: Any) -> Any:  # noqa: ANN401
-        original = store.record_with_lineage
+        # Every write goes through record_with_lineages, including a run's end batched with its
+        # performance's (performances design D3).
+        original = store.record_with_lineages
 
         def record(events: Any, lineage: Any, **kwargs: Any) -> Any:  # noqa: ANN401
             for event in events:
@@ -209,7 +212,7 @@ def failing_at(reported: int, *, end_too: bool = False) -> Any:  # noqa: ANN401
                     )
             return original(events, lineage, **kwargs)
 
-        store.record_with_lineage = record
+        store.record_with_lineages = record
         return store
 
     return wrap
@@ -234,3 +237,21 @@ STAGE = {
     "effects": "unenforced",
     "allowedBy": {"setting": "allow_unenforced_local_stage", "source": "env"},
 }
+
+PERFORMANCE = "7a1c0d2e-0000-4000-8000-00000000000a"
+"""A performance id for tests that record a run's events by hand: every run event names its
+performance in its lineage (spec: lineage, "Lineage names an event's performance")."""
+
+
+_PERFORMED = re.compile(
+    r"performance ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}): "
+    r"run ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}) succeeded\n"
+)
+
+
+def succeeded_run(out: str) -> str:
+    """The run id in a succeeded perform's standard output, checking the output is exactly that
+    one line: the performance, then the run (spec: cli)."""
+    match = _PERFORMED.fullmatch(out)
+    assert match is not None, f"not a succeeded perform's output: {out!r}"
+    return match.group(2)

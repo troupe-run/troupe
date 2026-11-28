@@ -31,7 +31,7 @@ from gitrepo import Repo
 from perform_failed_audit_shared import RemovesThenCancels
 from run_notices_shared import interrupted_with_a_notice
 from run_queries_shared import Child
-from runtesting import INIT, OK, Harness, request, script, turn
+from runtesting import INIT, OK, Harness, request, script, succeeded_run, turn
 from storetesting import git_service
 from troupe.cli import COMMANDS, commands
 from troupe.cli.parser import parse
@@ -93,7 +93,7 @@ def test_perform_uses_the_actors_effect_check_from_config(repo: Repo) -> None:
     configure(repo, script(INIT, write, OK), expect=["src/out.txt"])
     code, out, _ = cli("perform", "tester")
     assert code == 0
-    run_id = out.split()[1]
+    run_id = succeeded_run(out)
     assert started(repo, run_id)["effect_check"] == {"kind": "files", "paths": ["src/out.txt"]}
 
 
@@ -101,7 +101,7 @@ def test_the_direction_is_recorded_by_reference(repo: Repo) -> None:
     configure(repo, script(INIT, OK))
     code, out, _ = cli("perform", "tester", "--direction", "write the hello file")
     assert code == 0
-    run_id = out.split()[1]
+    run_id = succeeded_run(out)
     digest = hashlib.sha256(b"write the hello file").hexdigest()
     assert started(repo, run_id)["direction"] == f"sha256:{digest}"
 
@@ -128,10 +128,10 @@ def test_a_success_prints_progress_on_stderr_and_only_the_result_on_stdout(repo:
     configure(repo, script(INIT, turn("hello there"), OK))
     code, out, err = cli("perform", "tester")
     assert code == 0
-    run_id = out.split()[1]
-    assert out == f"run {run_id} succeeded\n"
+    run_id = succeeded_run(out)
     lines = err.splitlines()
-    assert lines[0].startswith(f"troupe: run {run_id} starting")
+    assert lines[0].startswith("troupe: performance ")
+    assert lines[1].startswith(f"troupe: run {run_id} starting")
     assert any("init: scripted 0.1.0" in line for line in lines)
     assert any("turn: assistant: hello there" in line for line in lines)
     assert lines.index(next(line for line in lines if "init:" in line)) > 0
@@ -226,7 +226,7 @@ def test_perform_as_a_real_process_records_the_run_in_the_theatre(repo: Repo) ->
         check=False,
     )
     assert done.returncode == 0, done.stderr
-    run_id = done.stdout.split()[1]
+    run_id = succeeded_run(done.stdout)
     topics = [r.topic.split(":")[1] for r in git_service(repo).history(UUID(run_id))]
     assert topics == ["Run.Started", "Run.Reported", "Run.Reported", "Run.Ended"]
 
@@ -238,7 +238,7 @@ def performed(repo: Repo, options: dict[str, Any]) -> str:
     configure(repo, options)
     code, out, err = cli("perform", "tester")
     assert code == 0, err
-    return out.split()[1]
+    return succeeded_run(out)
 
 
 def test_status_json_is_the_status_result_as_its_schema_shapes_it(repo: Repo) -> None:
@@ -285,9 +285,9 @@ def test_status_shows_one_run_and_lists_runs(repo: Repo) -> None:
     assert code == 0
     assert f"run {run_id}" in out
     assert "outcome: succeeded" in out
+    [performance] = re.findall(r"^  performance: (\S+) \(step 1\)$", out, re.M)
     code, out, _ = cli("status")
-    assert out.startswith(run_id)
-    assert "succeeded" in out
+    assert out.startswith(f"{performance}  run {run_id[:8]}  succeeded")
 
 
 def test_status_with_no_runs_says_so(repo: Repo) -> None:
@@ -428,7 +428,7 @@ def test_one_ctrl_c_cancels_the_run_records_cancelled_and_exits_130(repo: Repo) 
         "perform",
         "tester",
     )
-    run_id = troupe.wait_for("starting").split()[2]
+    run_id = troupe.wait_for("troupe: run ").split()[2]
     troupe.wait_for("init:")
     troupe.interrupt()
     code, out = troupe.finish()
@@ -452,7 +452,7 @@ def test_ctrl_c_twice_shows_the_notice_twice_and_still_records_the_end(repo: Rep
         "perform",
         "tester",
     )
-    run_id = troupe.wait_for("starting").split()[2]
+    run_id = troupe.wait_for("troupe: run ").split()[2]
     troupe.wait_for("init:")
     troupe.interrupt()
     troupe.wait_for("Cancelling the run")
@@ -475,7 +475,7 @@ def test_logs_follow_in_another_process_shows_a_running_runs_events_and_exits_0_
         "perform",
         "tester",
     )
-    run_id = troupe.wait_for("starting").split()[2]
+    run_id = troupe.wait_for("troupe: run ").split()[2]
     troupe.wait_for("init:")
     follow = subprocess.run(
         [*TROUPE, "logs", run_id[:8], "--follow"],
@@ -648,8 +648,8 @@ def test_the_list_of_runs_counts_notices_only_on_the_run_that_recorded_them(repo
     assert count >= 2  # the wait's silence and the retry, and any silence while it started
     code, out, _ = cli("status")
     assert code == 0
-    [noisy_line] = [line for line in out.splitlines() if line.startswith(noisy)]
-    [quiet_line] = [line for line in out.splitlines() if line.startswith(quiet)]
+    [noisy_line] = [line for line in out.splitlines() if f"  run {noisy[:8]}  " in line]
+    [quiet_line] = [line for line in out.splitlines() if f"  run {quiet[:8]}  " in line]
     assert noisy_line.endswith(f"events, {count} notices")
     assert "notice" not in quiet_line
 

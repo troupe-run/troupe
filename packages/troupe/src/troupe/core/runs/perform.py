@@ -63,6 +63,7 @@ from troupe.core.runs.aggregate import Run
 from troupe.core.runs.backends import PERFORM_PID_FILE
 from troupe.core.runs.backends import Backends as Backends
 from troupe.core.runs.backends import lease_dir as lease_dir
+from troupe.core.runs.performance import Performance, outcome_of
 from troupe.core.runs.projections import fold_runs
 from troupe.core.runtimes import RunRuntime
 from troupe.core.stages import load_stage
@@ -327,6 +328,7 @@ class _Recorder:
 
     def __init__(
         self,
+        performance_id: str,
         run_id: str,
         what: "_What",
         store: EventStore,
@@ -339,6 +341,7 @@ class _Recorder:
         context_full: ContextFull,
         runtime: RunRuntime | None = None,
     ) -> None:
+        self.performance_id = performance_id
         self.run_id = run_id
         self.what = what
         self.runtime = runtime
@@ -358,9 +361,21 @@ class _Recorder:
         self.queue: asyncio.Queue[_Entry] = asyncio.Queue()
         self.writer: asyncio.Task[None] | None = None
         self.run: Run | None = None
+        self.performance: Performance | None = None
         self.failure: _Failure | None = None
 
     def _start(self) -> None:
+        approvers = _approvers_data(self.what)
+        step: dict[str, Any] = {"actor": self.what.actor}
+        if approvers is not None:
+            step["approvers"] = approvers
+        performance = Performance(
+            performance_id=self.performance_id,
+            performed={"kind": "actor", "name": self.what.actor},
+            steps=[step],
+            direction=self.direction_ref,
+            config=list(self.what.config),
+        )
         run = Run(
             run_id=self.run_id,
             actor=self.what.actor,
@@ -371,13 +386,19 @@ class _Recorder:
             config=list(self.what.config),
             workspace=self.workspace,
             on_context_full=self.context_full.to_data(),
+            step=1,
             runtime=self.runtime.to_data() if self.runtime is not None else None,
-            approvers=_approvers_data(self.what),
+            approvers=approvers,
         )
         # The config version must still be here as the start is written: a person's drop of an
         # abandoned edit between this perform's sync and now refuses the start, never leaving a
-        # run naming events that are gone (abandoned-edits design D4).
-        self.person.record(run.collect_events(), requires=list(self.what.config))
+        # run naming events that are gone (abandoned-edits design D4). The performance's start is
+        # in the same batch, so neither is recorded without the other (performances design D2).
+        self.person.record(
+            [*performance.collect_events(), *run.collect_events()],
+            requires=list(self.what.config),
+        )
+        self.performance = performance
         self.run = run
 
     async def start(self, workspace: dict[str, Any]) -> None:
@@ -522,12 +543,25 @@ class _Recorder:
         run.end(outcome, recording, changes)
         ended = run.collect_events()
         approvers = self.what.resolved_approvers()
-        if (
-            approvers is None
-            or not gate.reaches_gate(outcome.get("outcome"), changes)
-            or not gate.first_is_a_person(approvers.value)
-            or changes is None
-        ):
+        gated = (
+            approvers is not None
+            and changes is not None
+            and gate.reaches_gate(outcome.get("outcome"), changes)
+        )
+        if not gated:
+            # No gate follows, so nothing more will happen in the performance: it ends with the
+            # run, in the same batch (performances design D3).
+            performance = self._performance()
+            performance.end(outcome_of(outcome.get("outcome")))
+            over = performance.collect_events()
+            self.store.record_with_lineages(
+                [*ended, *over],
+                [self.agent.lineage()] * len(ended) + [self.person.lineage()] * len(over),
+            )
+            return
+        if approvers is None or changes is None or not gate.first_is_a_person(approvers.value):
+            # troupe goes first, after the end: it keeps the work, ending the performance, or
+            # passes the gate to a person (troupes_step).
             self.agent.record(ended)
             return
         # A person first: the cue is recorded with the end, so no perform that stops after the
@@ -538,6 +572,11 @@ class _Recorder:
         self.store.record_with_lineages(
             [*ended, *cue], [self.agent.lineage()] * len(ended) + [troupe.lineage()] * len(cue)
         )
+
+    def _performance(self) -> Performance:
+        if self.performance is None:
+            raise RuntimeError(f"performance {self.performance_id}'s start isn't recorded")
+        return self.performance
 
     async def end(self, outcome: dict[str, Any], changes: dict[str, Any] | None) -> None:
         """Record the run's end, once every run event and notice raised before it is recorded."""
@@ -624,6 +663,7 @@ async def perform(
     merged = synced.merged
     what = _from_config(merged, request.actor)
 
+    performance_id = str(uuid4())
     run_id = str(uuid4())
     lease = lease_dir(theatre, run_id)
     lease.mkdir(parents=True)
@@ -632,7 +672,9 @@ async def perform(
         await asyncio.to_thread(replace_file, lease / PERFORM_PID_FILE, _pid_file())
         artifacts = backends.artifact_store(session)
         direction_ref = await asyncio.to_thread(artifacts.put, direction.encode("utf-8"))
-        person = store.command(via="cli", actor=person_identity, stage=admission)
+        person = store.command(
+            via="cli", actor=person_identity, stage=admission, performance=performance_id
+        )
         agent = person.acting_as(
             Identity(kind="agent", id=what.actor, source="troupe"), via="runner"
         )
@@ -640,6 +682,7 @@ async def perform(
         # From here every notice is the run's: sent live, and recorded in its history
         # (run-notices-in-history design D2).
         recorder = _Recorder(
+            performance_id,
             run_id,
             what,
             store,
@@ -664,8 +707,16 @@ async def perform(
             )
             await recorder.start(recorded_workspace)
             send(
+                m.PerformanceStarted(
+                    performance_id=performance_id,
+                    performed=m.Performed(kind="actor", name=what.actor),
+                )
+            )
+            send(
                 m.Started(
                     run_id=run_id,
+                    performance_id=performance_id,
+                    step=1,
                     worktree=recorded_workspace["path"] if planned is not None else None,
                 )
             )

@@ -10,7 +10,7 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from runtesting import STAGE, outcome
+from runtesting import PERFORMANCE, STAGE, outcome
 from storetesting import files_service, snapshot
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore
@@ -35,6 +35,7 @@ def new_run(run_id: str | None = None, workspace: dict[str, Any] | None = None) 
         config=["sha256:" + "b" * 64],
         workspace=workspace or {"kind": "theatre"},
         on_context_full={"value": "fail", "source": "default"},
+        step=1,
         approvers=(
             {"value": ["troupe", "director"], "source": "default"}
             if (workspace or {}).get("kind") == "worktree"
@@ -53,7 +54,7 @@ def recorded(tmp_path: Path) -> tuple[EventStore, Run]:
     run = new_run()
     run.report(0, log(run, 0))
     run.report(1, log(run, 1))
-    store.command(via="runner").record(run.collect_events())
+    store.command(via="runner", performance=PERFORMANCE).record(run.collect_events())
     return store, run
 
 
@@ -116,7 +117,7 @@ def test_a_notice_between_the_start_and_the_end_is_recorded_and_the_next_seq_is_
     run.notice(SILENT)
     run.report(2, log(run, 2))
     run.end(outcome("succeeded"), None)
-    store.command(via="runner").record(run.collect_events())
+    store.command(via="runner", performance=PERFORMANCE).record(run.collect_events())
     topics = [recording.topic for recording in store.history(UUID(run.run_id))]
     assert topics == [STARTED, REPORTED, REPORTED, NOTICED, REPORTED, ENDED]
 
@@ -124,7 +125,7 @@ def test_a_notice_between_the_start_and_the_end_is_recorded_and_the_next_seq_is_
 def test_a_notice_after_the_end_is_refused_and_nothing_is_written(tmp_path: Path) -> None:
     store, run = recorded(tmp_path)
     run.end(outcome("succeeded"), None)
-    store.command(via="runner").record(run.collect_events())
+    store.command(via="runner", performance=PERFORMANCE).record(run.collect_events())
     before = snapshot(tmp_path)
     with pytest.raises(TroupeError) as caught:
         run.notice(SILENT)
@@ -140,7 +141,9 @@ def test_a_second_start_for_a_recorded_run_is_refused_by_the_store_and_writes_no
     store, run = recorded(tmp_path)
     before = snapshot(tmp_path)
     with pytest.raises(TroupeError) as caught:
-        store.command(via="runner").record(new_run(run.run_id).collect_events())
+        store.command(via="runner", performance=PERFORMANCE).record(
+            new_run(run.run_id).collect_events()
+        )
     assert caught.value.code == "events.version-conflict"
     assert snapshot(tmp_path) == before
 
@@ -154,13 +157,13 @@ def test_any_gap_free_sequence_is_accepted_and_reads_back_in_order(
 ) -> None:
     store = files_service(tmp_path_factory.mktemp("run"))
     run = new_run()
-    store.command(via="cli").record(run.collect_events())
+    store.command(via="cli", performance=PERFORMANCE).record(run.collect_events())
     for seq in range(count):
         run.report(seq, log(run, seq))
-        store.command(via="runner").record(run.collect_events())
+        store.command(via="runner", performance=PERFORMANCE).record(run.collect_events())
     if end:
         run.end(outcome("succeeded"), None)
-        store.command(via="runner").record(run.collect_events())
+        store.command(via="runner", performance=PERFORMANCE).record(run.collect_events())
     history = store.history(UUID(run.run_id))
     assert [r.topic for r in history] == [STARTED, *[REPORTED] * count, *([ENDED] if end else [])]
     assert [r.version for r in history] == list(range(1, len(history) + 1))
@@ -177,7 +180,7 @@ def test_a_worktree_made_after_the_start_is_recorded_before_the_first_report(
     run = new_run(workspace=WORKTREE)
     run.made_worktree(["clonefile"])
     run.report(0, log(run, 0))
-    store.command(via="cli").record(run.collect_events())
+    store.command(via="cli", performance=PERFORMANCE).record(run.collect_events())
     history = store.history(UUID(run.run_id))
     assert [r.topic for r in history] == [STARTED, WORKTREE_MADE, REPORTED]
     loaded = store.load(UUID(run.run_id))
@@ -225,7 +228,7 @@ def test_a_worktree_made_out_of_place_is_refused_as_out_of_sequence(
 def test_a_worktree_runs_start_replays_with_its_workspace(tmp_path: Path) -> None:
     store = files_service(tmp_path)
     run = new_run(workspace=WORKTREE)
-    store.command(via="cli").record(run.collect_events())
+    store.command(via="cli", performance=PERFORMANCE).record(run.collect_events())
     loaded = store.load(UUID(run.run_id))
     assert isinstance(loaded, Run)
     assert loaded.workspace == WORKTREE

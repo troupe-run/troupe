@@ -55,6 +55,8 @@ PENDING = {
 }
 RUN: dict[str, Any] = {
     "runId": RUN_ID,
+    "performanceId": "7a1c0d2e-0000-4000-8000-00000000000a",
+    "step": 1,
     "actor": "lead",
     "startedBy": {"kind": "human", "id": "ada@example.com", "source": "vcs"},
     "runner": {"requested": "scripted", "reported": {"name": "scripted", "version": "0.2.0"}},
@@ -516,7 +518,7 @@ def test_a_waiting_run_is_shown_as_waiting_in_the_list(core: StandIn) -> None:
         "cue": {"role": "director", "raisedAt": "2026-11-26T07:00:00.000Z"},
     }
     line = render_run_line(_run(changes=waiting))
-    assert f"{RUN_ID}  succeeded, waiting" in line
+    assert f"run {RUN_ID[:8]}  succeeded, waiting" in line
 
 
 def test_status_of_a_run_shows_its_approvers(core: StandIn) -> None:

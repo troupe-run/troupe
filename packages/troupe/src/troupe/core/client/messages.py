@@ -362,6 +362,10 @@ class RunSummary(Message):
     the run's end (error, audit, transcript, stderr, recording)."""
 
     run_id: str = json_field("runId", pattern=p.RUN_ID_PATTERN)
+    performance_id: str = json_field("performanceId", pattern=p.RUN_ID_PATTERN)
+    """The performance the run is a step of (spec: performances)."""
+    step: int = json_field("step", minimum=1)
+    """The run's step in its performance, counting from 1."""
     actor: str = json_field("actor", pattern=ACTOR_NAME)
     started_by: ActorData = json_field("startedBy")
     runner: RunnerData = json_field("runner")
@@ -458,9 +462,29 @@ class LoggedEvent(Tagged):
 
 
 @dataclass(frozen=True)
+class Performed(Message):
+    """What a performance performs: an actor, by its name then (spec: performances)."""
+
+    kind: Literal["actor"] = json_field("kind")
+    name: str = json_field("name", pattern=ACTOR_NAME)
+
+
+@dataclass(frozen=True)
+class PerformanceStarted(Tagged):
+    """A performance's start is recorded: sent once, before its first run's ``started``
+    (performances design D7)."""
+
+    TYPE: ClassVar[str | None] = "performance-started"
+    performance_id: str = json_field("performanceId", pattern=p.RUN_ID_PATTERN)
+    performed: Performed = json_field("performed")
+
+
+@dataclass(frozen=True)
 class Started(Tagged):
     TYPE: ClassVar[str | None] = "started"
     run_id: str = json_field("runId", pattern=p.RUN_ID_PATTERN)
+    performance_id: str = json_field("performanceId", pattern=p.RUN_ID_PATTERN)
+    step: int = json_field("step", minimum=1)
     worktree: str | None = json_field("worktree", default=None, pattern=THEATRE_PATH)
 
 
@@ -486,7 +510,7 @@ class NoticeUpdate(Tagged):
     notice: NoticeData = json_field("notice")
 
 
-PerformUpdate = Started | LoggedEvent | NoticeUpdate
+PerformUpdate = PerformanceStarted | Started | LoggedEvent | NoticeUpdate
 LogsUpdate = LoggedEvent | LoggedNotice | NoticeUpdate
 
 

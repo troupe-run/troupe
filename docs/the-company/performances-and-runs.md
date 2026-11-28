@@ -8,9 +8,38 @@ prerelease: true
 A **performance** is one run of your process, through the roles it needs. A **run** is one actor's part in it:
 troupe starts the actor through its runner, records everything it reports, and works out how it ended.
 
-Today troupe runs one actor at a time, with `troupe perform`, so a performance is a single run. A performance that
-takes your process through several roles needs [flows](flows.md), and isn't built yet. A **rehearsal** will be the
-dry-run counterpart of a performance, and isn't built yet either.
+Every `troupe perform` records a performance, and each step of a performance is a run. Today a performance has one
+step: `troupe perform tester` is a performance whose one run is tester's. A performance that takes your process
+through several roles needs [flows](flows.md), and isn't built yet. A **rehearsal** will be the dry-run counterpart
+of a performance, and isn't built yet either.
+
+## A performance
+
+`troupe perform` prints the performance's id at once, then its run's id as the run starts, and on success standard
+output gets `performance <id>: run <id> succeeded`. Wherever a command takes a run (`status`, `logs`, `diff`,
+`accept`, `discard`, `approve`, `reject`), the performance's id works too, or its first 8 characters, as long as the
+performance has one run. A prefix that matches both a run and a performance is refused, listing both.
+
+A performance is recorded as its own stream of events:
+
+- **`Performance.Started`:** what was performed (an actor, by name), its steps (each step's actor, and for a run in
+  its own worktree, its approvers and where they came from), the direction, by reference, and the config version.
+  It's recorded together with its run's start, so neither is ever there without the other.
+- **`Performance.Ended`:** how it ended, once nothing more will happen in it: `completed` when its run succeeded and
+  its work was kept, or there was none; `failed` when its run didn't succeed; `rejected` when its work was rejected
+  at its gate; `cancelled` when you cancelled its run. It's recorded together with whatever settled it: the run's
+  end, troupe keeping its work, or your answer at the gate. A performance whose work waits for you hasn't ended.
+
+Every event of a performance and of its runs names the performance in its [lineage](lineage.md).
+
+`troupe status` lists the most recent performances, newest first. Each line starts with the performance's id, then
+its run's first 8 characters, then the run as before. `troupe status <run>` shows the run's performance and its step.
+
+**Runs from before performances.** Runs recorded by a troupe before 0.5.0 have no performance, and this troupe
+doesn't read them. `status`, `logs` and every command that reads runs refuse with
+`run.recorded-before-performances`, naming those runs and the files in `.troupe/events/` that hold them: the ones that
+hold nothing else, which you can remove and commit to go on without those runs, and the ones that hold other events
+too, to keep. Or read them with a troupe before 0.5.
 
 ## A run
 

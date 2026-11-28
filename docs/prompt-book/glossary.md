@@ -14,7 +14,7 @@ prerelease: false
 | direction | What a run of an actor is asked to do: given when it's performed |
 | system | troupe acting by itself, recorded as an actor of kind `system`. It's how lineage will show a change troupe observed, such as a merge, once troupe records them |
 | cast | The actors assigned to a performance |
-| performance | One run of your process |
+| performance | One run of your process: every `troupe perform` records one, and each of its steps is a run |
 | rehearsal | A dry run: any command that changes something, run with --rehearse, checks everything, shows what it would do, and changes nothing |
 | audition | What troupe init --audition writes: a working example actor, Claude Code by default, ready to perform or edit. Not a rehearsal, which is a dry run (--rehearse) |
 | stage | Where an actor runs: on the host, in a container, or elsewhere |

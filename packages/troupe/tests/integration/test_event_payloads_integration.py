@@ -12,7 +12,7 @@ import pytest
 
 from protocol_guard import ProtocolGuardError
 from protocol_schemas import PROTOCOL_BASE, SCHEMAS, SCRIPTED, load, validator_for
-from runtesting import INIT, OK, Harness, failing_at, request, script, theatre, turn
+from runtesting import INIT, OK, PERFORMANCE, Harness, failing_at, request, script, theatre, turn
 from storetesting import git_service, segments
 from troupe.core import defaults
 from troupe.core.errors import TroupeError
@@ -325,6 +325,7 @@ def _run() -> Run:
         config=[HASH],
         workspace={"kind": "theatre"},
         on_context_full={"value": "fail", "source": "default"},
+        step=1,
     )
 
 
@@ -336,7 +337,7 @@ def test_recording_a_payload_with_a_field_its_topic_does_not_define_fails_naming
     event = {**INIT["event"], "effects": "checked", "runId": run.run_id, "seq": 0, "colour": "blue"}
     run.report(0, event)
     with pytest.raises(ProtocolGuardError, match=r"Run\.Reported.*'colour' was unexpected"):
-        store.command(via="cli").record(run.collect_events())
+        store.command(via="cli", performance=PERFORMANCE).record(run.collect_events())
 
 
 def test_recording_a_run_whose_payloads_match_their_topics_passes_the_guard(
@@ -345,7 +346,7 @@ def test_recording_a_run_whose_payloads_match_their_topics_passes_the_guard(
     store = git_service(theatre(tmp_path))
     run = _run()
     run.report(0, {**INIT["event"], "effects": "checked", "runId": run.run_id, "seq": 0})
-    assert len(store.command(via="cli").record(run.collect_events())) == 2
+    assert len(store.command(via="cli", performance=PERFORMANCE).record(run.collect_events())) == 2
 
 
 WORKTREE = {"kind": "worktree", "path": ".troupe/local/worktrees/run", "base": "c" * 40}
@@ -365,8 +366,9 @@ def test_a_worktree_made_with_a_field_its_topic_does_not_define_fails_naming_the
         config=[HASH],
         workspace={**WORKTREE, "dirty": False},
         on_context_full={"value": "fail", "source": "default"},
+        step=1,
         approvers={"value": ["troupe", "director"], "source": "default"},
     )
     run.made_worktree(["teleport"])
     with pytest.raises(ProtocolGuardError, match=r"Run\.WorktreeMade.*'teleport'"):
-        store.command(via="cli").record(run.collect_events())
+        store.command(via="cli", performance=PERFORMANCE).record(run.collect_events())

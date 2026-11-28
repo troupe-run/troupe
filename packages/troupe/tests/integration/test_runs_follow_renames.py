@@ -11,7 +11,7 @@ import pytest
 
 from client_schemas import check
 from gitrepo import Repo, make_repo
-from runtesting import ADA, ALLOW
+from runtesting import ADA, ALLOW, succeeded_run
 from troupe.cli import main
 from troupe.core.errors import TroupeError
 from troupe.core.exit_codes import ExitCode
@@ -39,7 +39,7 @@ def _performed() -> str:
     # The audition's actor waits at its gate for director (manual-gates decision 8).
     code, out, err = cli("perform", "lead", "--direction", "Write the file.")
     assert code == ExitCode.WAITING, err
-    return out.split()[1]
+    return succeeded_run(out)
 
 
 def _status_json() -> dict[str, Any]:
@@ -59,7 +59,7 @@ def test_status_shows_a_run_before_a_rename_as_the_old_name_now_the_new(repo: Re
     assert code == ExitCode.OK, err
     code, out, _ = cli("status")
     assert code == ExitCode.OK
-    [line] = [line for line in out.splitlines() if line.startswith(run)]
+    [line] = [line for line in out.splitlines() if f"  run {run[:8]}  " in line]
     assert "lead (now star)" in line
     result = _status_json()
     check(result, "status-result.schema.json")
@@ -83,7 +83,7 @@ def test_a_run_whose_actor_kept_its_name_shows_the_name_alone(repo: Repo) -> Non
     assert code == ExitCode.OK
     assert not any(line.startswith("  actor:") for line in out.splitlines())
     code, out, _ = cli("status")
-    [line] = [line for line in out.splitlines() if line.startswith(run)]
+    [line] = [line for line in out.splitlines() if f"  run {run[:8]}  " in line]
     assert " lead " in line
     assert "(now" not in line
     assert "actorNow" not in _status_json()["runs"][0]
@@ -146,6 +146,6 @@ def test_status_still_shows_runs_when_configs_stream_cant_be_read(
     monkeypatch.setattr(stream, "read", broken)
     code, out, err = cli("status")
     assert code == ExitCode.OK, err
-    [line] = [line for line in out.splitlines() if line.startswith(run)]
+    [line] = [line for line in out.splitlines() if f"  run {run[:8]}  " in line]
     assert " lead " in line
     assert "(now" not in line

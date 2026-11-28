@@ -7,7 +7,9 @@ A run is its own stream, keyed by its run id (a UUID minted by perform). Its eve
   check that can refuse the run has passed. It holds the actor's name, the runner requested, the
   stage's admission, the effect check, the direction as an artifact reference, the config version
   the run used (config-model design D14), its workspace (worktree-stage design D7), and what the
-  run does when its context fills, with where that came from (compaction-opt-in design D3). For a
+  run does when its context fills, with where that came from (compaction-opt-in design D3), and
+  its step in its performance, counting from 1 (spec: performances; its lineage names the
+  performance). For a
   worktree, that's where the worktree will be, so an event names it before any part of it exists.
 - ``Run.WorktreeMade``: a worktree run's clone mechanisms, once its worktree is made and before its
   runner starts.
@@ -79,10 +81,12 @@ class Run(Aggregate):
         config: list[str],
         workspace: dict[str, Any],
         on_context_full: dict[str, Any],
+        step: int,
         runtime: dict[str, Any] | None = None,
         approvers: dict[str, Any] | None = None,
     ) -> None:
         self.run_id = run_id
+        self.step = step
         self.approvers = approvers
         self.runtime = runtime
         self.on_context_full = on_context_full

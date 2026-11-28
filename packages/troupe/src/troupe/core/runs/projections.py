@@ -91,6 +91,10 @@ class RunView:
     """The cue raised at the gate: its role and when."""
     kept_files: list[str] | None = None
     """The files an acceptance changed."""
+    performance: str | None = None
+    """The performance the run is a step of, from its start's lineage (spec: performances). None
+    only for a run recorded before performances, which reading runs back refuses (performances
+    design D8)."""
 
     def apply(self, recording: Recording, *, keep_log: bool) -> None:
         state = _state(recording)
@@ -98,6 +102,7 @@ class RunView:
             self.started = state
             self.started_by = (recording.lineage or {}).get("actor")
             self.started_at = _at(recording)
+            self.performance = (recording.lineage or {}).get("performance")
         elif recording.topic == WORKTREE_MADE:
             self.clones = state["clones"]
         elif recording.topic == REPORTED:
@@ -223,6 +228,8 @@ class RunView:
         outcome: dict[str, Any] = (self.ended or {}).get("outcome") or {}
         summary = {
             "runId": self.run_id,
+            "performanceId": self.performance,
+            "step": started.get("step"),
             "actor": started["actor"],
             "startedBy": self.started_by,
             "runner": _present(

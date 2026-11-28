@@ -57,6 +57,19 @@ A commit counts towards a component when it changes files under that component's
 Each component has its own `CHANGELOG.md` in its directory. Tags are `<component>-v<version>`, for example
 `troupe-v0.1.0`, `protocol-v0.1.0` and `troupe-runner-scripted-v0.1.0`.
 
+### Records an older troupe wrote
+
+**Before 1.0, troupe may refuse records an older troupe wrote, without migrating them.** When it does, it says so
+clearly and says how to fix it: the refusal names the record, says which change it predates, and gives the fix, as
+any malformed input does. It never crashes, guesses a value, or skips the record silently. The change that does it is
+a breaking release (`!`, or a `BREAKING CHANGE:` footer).
+
+So a schema change that makes a field required makes it required everywhere, in what troupe writes and what it reads
+back. There's no lenient "absent: recorded before this change" form. The owner decided this on 2026-11-28
+([troupe#124](https://github.com/troupe-run/troupe/issues/124)), building on 2026-11-07's ruling on
+[#296](https://github.com/troupe-run/troupe/issues/296) that schemas aren't made flexible for records that don't
+exist. The rule may get firmer as 1.0 nears.
+
 ### The protocol version troupe ships
 
 The troupe package carries a copy of `protocol/schemas/` (`packages/troupe/src/troupe/protocol/`), and records which

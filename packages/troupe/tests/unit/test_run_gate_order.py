@@ -39,6 +39,7 @@ def ended() -> Run:
         config=["sha256:" + "b" * 64],
         workspace=WORKTREE,
         on_context_full={"value": "fail", "source": "default"},
+        step=1,
         approvers={"value": ["troupe", "director"], "source": "default"},
     )
     run.end(outcome("succeeded"), None, {"diff": DIFF, "added": 1, "modified": 0, "deleted": 0})
@@ -132,6 +133,7 @@ def before_end() -> Run:
         config=run.config,
         workspace=WORKTREE,
         on_context_full=run.on_context_full,
+        step=1,
         approvers=run.approvers,
     )
     fresh.collect_events()

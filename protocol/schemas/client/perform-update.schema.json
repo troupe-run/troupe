@@ -2,14 +2,50 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://troupe.run/protocol/client/perform-update.schema.json",
   "title": "perform: update",
-  "description": "Sent while perform runs, before its result: the run id once it is minted, each run event as it is recorded, and each notice.",
+  "description": "Sent while perform runs, before its result: the performance once its start is recorded, the run id once it is minted, each run event as it is recorded, and each notice.",
   "oneOf": [
     {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "kind",
-        "runId"
+        "performanceId",
+        "performed"
+      ],
+      "properties": {
+        "kind": {
+          "const": "performance-started"
+        },
+        "performanceId": {
+          "$ref": "../lineage.schema.json#/$defs/performanceId"
+        },
+        "performed": {
+          "description": "What the performance performs. Until flows, always an actor, by its name.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "name"
+          ],
+          "properties": {
+            "kind": {
+              "const": "actor"
+            },
+            "name": {
+              "$ref": "run.schema.json#/$defs/actorName"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "runId",
+        "performanceId",
+        "step"
       ],
       "properties": {
         "kind": {
@@ -17,6 +53,15 @@
         },
         "runId": {
           "$ref": "run.schema.json#/$defs/runId"
+        },
+        "performanceId": {
+          "description": "The performance the run is a step of.",
+          "$ref": "../lineage.schema.json#/$defs/performanceId"
+        },
+        "step": {
+          "description": "The run's step in its performance, counting from 1.",
+          "type": "integer",
+          "minimum": 1
         },
         "worktree": {
           "description": "The run's worktree, relative to the theatre, where it works. Absent: the run works in the theatre.",

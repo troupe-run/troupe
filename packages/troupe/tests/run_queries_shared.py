@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from gitrepo import Repo
-from runtesting import request
+from runtesting import PERFORMANCE, request
 from storetesting import (
     wait_until,
 )
@@ -110,11 +110,12 @@ def started(store: EventStore, workspace: dict[str, Any]) -> Run:
         config=["sha256:" + "b" * 64],
         workspace=workspace,
         on_context_full={"value": "fail", "source": "default"},
+        step=1,
         approvers=(
             {"value": ["troupe", "director"], "source": "default"}
             if workspace.get("kind") == "worktree"
             else None
         ),
     )
-    store.command(via="cli").record(run.collect_events())
+    store.command(via="cli", performance=PERFORMANCE).record(run.collect_events())
     return run

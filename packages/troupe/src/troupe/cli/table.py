@@ -70,10 +70,13 @@ def _run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) 
 
 # status and logs
 
+RUN_HELP = "a run's id, or its performance's, or at least the first 8 characters of either"
+"""Every command that takes a run takes its performance's id too (spec: performances)."""
+
 
 def _configure_status(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("run", nargs="?", help="a run's id, or at least its first 8 characters")
-    parser.add_argument("--limit", type=int, help="how many runs to list, newest first")
+    parser.add_argument("run", nargs="?", help=RUN_HELP)
+    parser.add_argument("--limit", type=int, help="how many performances to list, newest first")
     parser.add_argument("--json", action="store_true", help="print the result as JSON")
 
 
@@ -84,7 +87,7 @@ def _run_status(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -
 
 
 def _configure_logs(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("run", help="a run's id, or at least its first 8 characters")
+    parser.add_argument("run", help=RUN_HELP)
     parser.add_argument(
         "--follow", action="store_true", help="wait for new events and notices until the run ends"
     )
@@ -101,7 +104,7 @@ def _run_logs(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> 
 
 
 def _configure_diff(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("run", help="a run's id, or at least its first 8 characters")
+    parser.add_argument("run", help=RUN_HELP)
     parser.add_argument("--json", action="store_true", help="print the result as JSON")
 
 
@@ -112,7 +115,7 @@ def _run_diff(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -> 
 
 
 def _configure_settle(parser: argparse.ArgumentParser, rehearse: str) -> None:
-    parser.add_argument("run", help="a run's id, or at least its first 8 characters")
+    parser.add_argument("run", help=RUN_HELP)
     parser.add_argument("--reason", help="why, recorded in the lineage")
     parser.add_argument("--rehearse", action="store_true", help=rehearse)
 
@@ -180,7 +183,9 @@ def _run_reject(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -
 
 RUN_COMMANDS: tuple[Command, ...] = (
     Command("perform", "Run one actor and record the run.", _configure_perform, _run_perform),
-    Command("status", "Show the most recent runs, or one run.", _configure_status, _run_status),
+    Command(
+        "status", "Show the most recent performances, or one run.", _configure_status, _run_status
+    ),
     Command("logs", "Show a run's events and notices in order.", _configure_logs, _run_logs),
     Command("diff", "Show the changes a worktree run captured.", _configure_diff, _run_diff),
     Command(

@@ -254,7 +254,7 @@ def failing_notice(code: str) -> Any:  # noqa: ANN401
     """A store wrapper whose write of the notice ``code`` fails as a full disk would."""
 
     def wrap(store: Any) -> Any:  # noqa: ANN401
-        original = store.record_with_lineage
+        original = store.record_with_lineages
 
         def record(events: Any, lineage: Any, **kwargs: Any) -> Any:  # noqa: ANN401
             for event in events:
@@ -266,7 +266,7 @@ def failing_notice(code: str) -> Any:  # noqa: ANN401
                     )
             return original(events, lineage, **kwargs)
 
-        store.record_with_lineage = record
+        store.record_with_lineages = record
         return store
 
     return wrap

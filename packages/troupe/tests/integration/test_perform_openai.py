@@ -15,7 +15,7 @@ from cli_runs_shared import cli
 from gitrepo import Repo
 from perform_runtime_shared import _harness, _runner_commands
 from perform_shared import FAKE_SECRET
-from runtesting import ADA, ALLOW, request, theatre
+from runtesting import ADA, ALLOW, request, succeeded_run, theatre
 from troupe.core.exit_codes import ExitCode
 
 KEY = "sk-test/canary-0123456789abcdef"
@@ -71,7 +71,7 @@ def test_an_actor_on_the_openai_style_runner_writes_its_file_in_a_worktree(repo:
         )
         assert code == ExitCode.WAITING, err
         assert {r.headers["authorization"] for r in fake.requests} == {f"Bearer {KEY}"}
-    run_id = out.split()[1]
+    run_id = succeeded_run(out)
     assert "succeeded" in out + err
     code, logs, err = cli("logs", run_id[:8])
     assert code == ExitCode.OK, err

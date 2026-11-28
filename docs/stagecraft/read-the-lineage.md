@@ -52,8 +52,9 @@ troupe status <run> --json
 
 Each event's full lineage is in the event files themselves, in `.troupe/events/`, one JSON record per line. There,
 every event of a run carries the same `change` id, so you can tell what one command caused, and each event's `cause`
-says whether the command made it directly or it was recorded in reaction to another event. No command shows that
-part yet.
+says whether the command made it directly or it was recorded in reaction to another event. Every event of a run, and
+of the performance it's part of, names that performance in its `performance`, so you can gather everything one
+`troupe perform` led to, including an approval given later. No command shows that part yet.
 
 ## In git
 

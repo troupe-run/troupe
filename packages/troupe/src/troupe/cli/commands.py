@@ -185,7 +185,14 @@ def run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -
         params["rehearse"] = True
 
     def on_update(update: dict[str, Any]) -> None:
-        if update["kind"] == "started":
+        if update["kind"] == "performance-started":
+            performed = update["performed"]
+            print(
+                f"troupe: performance {update['performanceId']} ({performed['name']}) starting",
+                file=stderr,
+                flush=True,
+            )
+        elif update["kind"] == "started":
             run_id = update["runId"]
             print(
                 f"troupe: run {run_id} starting; follow it from another terminal with "
@@ -226,7 +233,7 @@ def run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -
     if hint is not None:
         print(hint, file=stderr)
     if run["outcome"] == "succeeded":
-        print(f"run {run['runId']} succeeded", file=stdout)
+        print(f"performance {run['performanceId']}: run {run['runId']} succeeded", file=stdout)
         waiting = (run.get("changes") or {}).get("state") == "waiting"
         return ExitCode.WAITING if waiting else ExitCode.OK
     if run["outcome"] == "cancelled":

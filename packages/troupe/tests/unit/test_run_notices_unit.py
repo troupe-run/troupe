@@ -13,7 +13,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from configtesting import TESTER
-from runtesting import STAGE, outcome
+from runtesting import PERFORMANCE, STAGE, outcome
 from storetesting import files_service
 from troupe.core.client import messages as m
 from troupe.core.config.changes import change
@@ -40,6 +40,7 @@ def new_recorder(store: Any, run_id: str, send: Any) -> Any:  # noqa: ANN401
     """perform's recorder for a run in the theatre, outside perform: called on the event loop."""
     person = store.command(via="cli")
     agent = person.acting_as(Identity(kind="agent", id="tester", source="troupe"), via="runner")
+    in_performance = person.in_performance(PERFORMANCE)
     # A real config version: a run's start requires its config heads to be here
     # (abandoned-edits design D4).
     merged = read_config(store)
@@ -56,11 +57,12 @@ def new_recorder(store: Any, run_id: str, send: Any) -> Any:  # noqa: ANN401
         workspace="theatre",
     )
     return perform_module._Recorder(
+        PERFORMANCE,
         run_id,
         what,
         store,
-        person,
-        agent,
+        in_performance,
+        agent.in_performance(PERFORMANCE),
         STAGE,
         "sha256:" + "a" * 64,
         send,

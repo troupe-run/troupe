@@ -33,6 +33,8 @@ def test_a_running_runs_summary_renders_no_outcome_end_transcript_or_stderr() ->
     summary = m.RunSummary.from_data(
         {
             "runId": "0f8fad5b-d9cb-469f-a165-70867728950e",
+            "performanceId": "7a1c0d2e-0000-4000-8000-00000000000a",
+            "step": 1,
             "actor": "tester",
             "startedBy": {"kind": "human", "id": "ada@example.com", "source": "env"},
             "runner": {"requested": "scripted"},
@@ -57,6 +59,8 @@ def test_an_ended_runs_transcript_line_names_kinds_only_when_its_records_have_th
     summary = m.RunSummary.from_data(
         {
             "runId": "0f8fad5b-d9cb-469f-a165-70867728950e",
+            "performanceId": "7a1c0d2e-0000-4000-8000-00000000000a",
+            "step": 1,
             "actor": "tester",
             "startedBy": {"kind": "human", "id": "ada@example.com", "source": "env"},
             "runner": {"requested": "scripted"},
@@ -103,6 +107,8 @@ def test_a_context_line_names_kind_who_and_counts_with_a_question_mark_for_a_mis
 def test_an_audit_that_couldnt_run_is_shown_with_its_error() -> None:
     summary = {
         "runId": "0f8fad5b-d9cb-469f-a165-70867728950e",
+        "performanceId": "7a1c0d2e-0000-4000-8000-00000000000a",
+        "step": 1,
         "actor": "tester",
         "startedBy": {"kind": "unknown"},
         "runner": {"requested": "scripted"},

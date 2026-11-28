@@ -105,6 +105,10 @@ CODES: dict[str, ExitCode] = {
     "run.recording-failed": ExitCode.FAILURE,
     "run.not-found": ExitCode.FAILURE,
     "run.ambiguous-id": ExitCode.FAILURE,
+    # Performances (performances design D1, D6, D8). contributing/runs.md lists them.
+    "performance.out-of-sequence": ExitCode.FAILURE,
+    "performance.several-runs": ExitCode.FAILURE,
+    "run.recorded-before-performances": ExitCode.FAILURE,
     # A run's changes (worktree-stage design D6, D9). contributing/runs.md lists them.
     "run.not-ended": ExitCode.FAILURE,
     "run.no-changes": ExitCode.FAILURE,
