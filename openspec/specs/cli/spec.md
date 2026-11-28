@@ -210,13 +210,15 @@ fix that names `troupe init`, and SHALL NOT create one.
 - **AND** no `.troupe/` is created
 
 ### Requirement: Perform shows progress on standard error and the result on standard output
-`troupe perform` SHALL write the run id at once, then each run event and notice as it happens, to standard error. On
-success it SHALL write the run id and `succeeded` to standard output. Otherwise standard output SHALL stay empty, and
-the run's error SHALL be shown on standard error with the run id.
+`troupe perform` SHALL write the performance's id at once, then the run id, then each run event and notice as it
+happens, to standard error. On success it SHALL write the performance id, the run id and `succeeded` to standard
+output. Otherwise standard output SHALL stay empty, and the run's error SHALL be shown on standard error with the run
+id.
 
 #### Scenario: Progress while a run is going
 - **WHEN** a run is going
-- **THEN** standard error shows the run id before the first event, and a line for each event as it is recorded
+- **THEN** standard error shows the performance's id and the actor's name, then the run id, before the first event,
+  and a line for each event as it is recorded
 
 #### Scenario: A failed run
 - **WHEN** a run ends `failed`
@@ -245,8 +247,9 @@ refused before the run starts SHALL exit with its error's code.
 - **THEN** `troupe perform` exits 0
 
 ### Requirement: Status and logs commands
-`troupe status [<run>] [--limit <n>]` SHALL show runs, and `troupe logs <run> [--follow]` SHALL show a run's log,
-each as the `status` and `logs` queries return them. Both SHALL show the store's notices, and the notices the query
+`troupe status [<ref>] [--limit <n>]` SHALL show performances and runs, and `troupe logs <ref> [--follow]` SHALL show
+a run's log, each as the `status` and `logs` queries return them, where `<ref>` names a run or a performance. Each
+line of the list SHALL start with the performance's id. Both SHALL show the store's notices, and the notices the query
 derives when it reads a run, on standard error. The notices a run recorded are part of its history, shown as its
 summary and log are.
 

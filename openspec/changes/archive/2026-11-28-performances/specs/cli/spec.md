@@ -11,10 +11,6 @@ id.
 - **THEN** standard error shows the performance's id and the actor's name, then the run id, before the first event,
   and a line for each event as it is recorded
 
-#### Scenario: A successful run
-- **WHEN** a person performs `tester` and its run ends `succeeded`
-- **THEN** standard output is one line naming the performance, the run and `succeeded`
-
 #### Scenario: A failed run
 - **WHEN** a run ends `failed`
 - **THEN** standard output is empty
@@ -35,11 +31,3 @@ summary and log are.
 - **WHEN** a person runs `troupe logs <run>` for an `interrupted` run that recorded a `run.silent` notice
 - **THEN** the `run.silent` notice is on standard output, among the events, and `run.interrupted` is on standard
   error
-
-#### Scenario: The list starts each line with the performance
-- **WHEN** a person has performed `tester` and runs `troupe status`
-- **THEN** the line for that perform starts with the performance's id, then names the run and its state as before
-
-#### Scenario: A run's summary names its performance
-- **WHEN** a person runs `troupe status <run>`
-- **THEN** the summary shows the run's performance and its step
