@@ -109,3 +109,29 @@ def test_unsetting_an_actor_a_flow_names_is_refused_naming_the_flow(repo: Repo) 
         _call(repo, "config-set", {"operations": [{"path": ["actors", "writer"], "unset": True}]})
     assert caught.value.code == "config.invalid"
     assert caught.value.details["path"] == ["flows", "review", "steps"]
+
+
+def test_a_flow_file_naming_the_wrong_schema_is_refused_naming_the_flow_schema(repo: Repo) -> None:
+    from troupe.core.errors import TroupeError
+
+    _with_a_flow(repo)
+    path = _flow_file(repo)
+    path.write_text(
+        path.read_text(encoding="utf-8").replace("config/flow.schema.json", "config/x.schema.json"),
+        encoding="utf-8",
+    )
+    with pytest.raises(TroupeError) as caught:
+        _config(repo)
+    assert "must name the flow schema" in caught.value.problem
+    assert "flow schema's URL" in caught.value.fix
+    assert "runtime" not in caught.value.problem + caught.value.fix
+
+
+def test_an_empty_flow_file_says_deleting_it_removes_the_flow(repo: Repo) -> None:
+    from troupe.core.errors import TroupeError
+
+    _with_a_flow(repo)
+    _flow_file(repo).write_text("", encoding="utf-8")
+    with pytest.raises(TroupeError) as caught:
+        _config(repo)
+    assert "remove the flow review" in caught.value.fix

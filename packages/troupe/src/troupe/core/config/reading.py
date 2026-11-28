@@ -111,9 +111,13 @@ def _read(path: str, data: bytes) -> FileValues:
     return FileValues(path, group, holds, values)
 
 
+_KIND_WORD = {ACTORS: "actor", RUNTIMES: "runtime", FLOWS: "flow"}
+"""Each kind of config file by the word for one of its entities, as a refusal names it."""
+
+
 def _removes(group: tuple[str, str]) -> str:
     kind, name = group
-    return f"the actor {name}" if kind == ACTORS else f"the runtime {name}"
+    return f"the {_KIND_WORD[kind]} {name}"
 
 
 def invalid(
@@ -208,7 +212,7 @@ def _yaml_values(path: str, text: str, group: tuple[str, str]) -> dict[str, Any]
     if SCHEMA_KEY in loaded:
         schema = loaded.pop(SCHEMA_KEY)
         if not isinstance(schema, str) or not _SCHEMA_PATTERN[kind].search(schema):
-            wanted = "actor" if kind == ACTORS else "runtime"
+            wanted = _KIND_WORD[kind]
             raise invalid(
                 path,
                 "schema-url",
