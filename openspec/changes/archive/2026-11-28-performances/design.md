@@ -210,6 +210,6 @@ Alternatives:
 
 ## Migration Plan
 
-None for data: older runs are refused with a fix (D8). The protocol release is breaking (0.4.0 → 0.5.0), carried by a `feat(protocol)!:` commit with a
+None for data: older runs are refused with a fix (D8). The protocol release is breaking (0.4.0 → 0.5.0), carried by the `feat(runs)!:` commit with a
 `BREAKING CHANGE:` footer. After this pull request merges, troupe-run/infrastructure gets the pull request that
 records the `performances` spec's Purpose in `oob/troupe-spec-purposes.json`.
