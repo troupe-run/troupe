@@ -301,13 +301,28 @@ def test_discarding_an_interrupted_run_removes_its_worktree_and_records_the_disc
         step=1,
         approvers={"value": ["troupe", "director"], "source": "default"},
     )
-    store.command(via="cli", performance=PERFORMANCE).record(interrupted.collect_events())
+    from troupe.core.runs.performance import Performance
+
+    performance = Performance(
+        performance_id=PERFORMANCE,
+        performed={"kind": "actor", "name": "tester"},
+        steps=[{"actor": "tester"}],
+        direction="sha256:" + "a" * 64,
+        config=started["config"],
+    )
+    store.command(via="cli", performance=PERFORMANCE).record(
+        [*performance.collect_events(), *interrupted.collect_events()]
+    )
     (repo.path / ".troupe" / "local" / "runs" / other_id).mkdir(parents=True)  # a free lease
     worktree = worktree_path(repo.path, other_id)
     store.vcs.add_worktree(worktree, started["workspace"]["base"])
     call_discard(made, other_id)
     assert not worktree.exists()
     assert last_event(made, other_id)[0] == "Run.ChangesDiscarded"
+    # Nothing more will happen in its performance, which its perform left open: the discard ends
+    # it (spec: performances, "Settling a run ends a performance its perform left open").
+    [*_, ended] = store.history(UUID(PERFORMANCE))
+    assert json.loads(ended.state)["outcome"] == "rejected"
 
 
 def test_discarding_a_run_that_couldnt_start_removes_the_worktree_it_left(repo: Repo) -> None:

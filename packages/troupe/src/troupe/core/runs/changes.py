@@ -166,12 +166,16 @@ def record_settling(
     command: Command | None = None,
     approved_as: str | None = None,
     ends: Outcome | None = None,
+    ends_if_open: Outcome | None = None,
 ) -> None:
     """Record what ``settle`` does to the run, as ``command`` (a person's command, through
     cli, by default), naming the run's ``performance`` in its lineage. With ``approved_as``, the
     run's events carry one approval in that role, by the command's own actor (spec: lineage,
     "Approvals come only from a gate"). With ``ends``, the performance's end, with that outcome, is
-    recorded in the same batch, by the same command, with no approval (performances design D3)."""
+    recorded in the same batch, by the same command, with no approval (performances design D3).
+    With ``ends_if_open``, the same, but only when the performance has no end yet: a person's
+    accept or discard settles a run whose perform stopped before troupe's turn at its gate, and
+    nothing more will happen in its performance (owner, 2026-11-28, on the review of #545)."""
     run = store.load(UUID(run_id))
     if not isinstance(run, Run):
         raise TypeError(f"run {run_id}'s stream doesn't hold a run")
@@ -186,11 +190,14 @@ def record_settling(
     )
     settled = run.collect_events()
     over: list[Any] = []
-    if ends is not None:
+    if ends is not None or ends_if_open is not None:
         loaded = store.load(UUID(performance))
         if not isinstance(loaded, Performance):
             raise TypeError(f"performance {performance}'s stream doesn't hold a performance")
-        loaded.end(ends)
+        if ends is not None:
+            loaded.end(ends)
+        elif ends_if_open is not None and loaded.outcome is None:
+            loaded.end(ends_if_open)
         over = list(loaded.collect_events())
     store.record_with_lineages(
         [*settled, *over],
@@ -229,6 +236,7 @@ def keep(
     command: Command | None = None,
     approved_as: str | None = None,
     ends: Outcome | None = None,
+    ends_if_open: Outcome | None = None,
 ) -> m.AcceptResult:
     """Apply the run's diff (``data``) to the working tree, all or nothing, record it, then
     remove the worktree. Refused with run.changes-conflict, changing nothing, when it doesn't
@@ -258,6 +266,7 @@ def keep(
         command=command,
         approved_as=approved_as,
         ends=ends,
+        ends_if_open=ends_if_open,
     )
     notices: list[m.NoticeData] = []
     try:
@@ -293,6 +302,7 @@ def _accept(
             rehearse=bool(request.rehearse),
             reason=request.reason,
             announce=announce,
+            ends_if_open="completed",
         )
 
 
@@ -341,6 +351,7 @@ def _discard(
                 request.reason,
                 lambda run: run.discard_changes(),
                 performance=performance_of(view),
+                ends_if_open="rejected",
             )
     return m.DiscardResult(
         run=view.run_id, worktree=changes["worktree"], rehearsed=bool(request.rehearse), notices=[]

@@ -28,7 +28,7 @@
       "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
     },
     "outcome": {
-      "description": "How it ended: completed when every step ran and its work was kept or there was none, failed when a step didn't succeed or its changes couldn't be captured, rejected when its work was rejected at a gate, cancelled when a step was cancelled.",
+      "description": "How it ended: completed when every step ran and its work was kept or there was none, failed when a step didn't succeed or its changes couldn't be captured, rejected when its work was turned down at a gate or discarded, cancelled when a step was cancelled.",
       "enum": [
         "completed",
         "failed",

@@ -88,8 +88,10 @@ so with it the performance's end is `perform`'s person command's.
 | `approve` | the acceptance (approver's lineage, with the approval) + the performance's end, `completed` |
 | `reject` | the rejection + the performance's end, `rejected` |
 
-`accept` and `discard` record nothing in the performance. They only apply to a run that didn't reach a gate, and its
-performance ended with the run.
+`accept` and `discard` normally record nothing in the performance: they apply to a run that didn't reach a gate, and
+its performance ended with the run. When the performance has no end (its perform stopped after the run's end and
+before troupe's turn, or before the run's end), the accept ends it `completed` and the discard `rejected`, in the same
+batch (owner, 2026-11-28, on the review of troupe#545).
 
 The outcome comes from the run's: `succeeded` → `completed`, `cancelled` → `cancelled`, every other outcome →
 `failed`. A run that succeeded but whose changes couldn't be captured is `failed` too: its work can never reach its

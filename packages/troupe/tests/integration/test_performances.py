@@ -268,3 +268,36 @@ def test_status_with_a_limit_of_two_lists_the_two_most_recent_performances(
     assert [(run.performance_id, run.run_id) for run in listed] == [
         (run.performance_id, run.run_id) for run in reversed(runs[1:])
     ]
+
+
+# Requirement: Settling a run ends a performance its perform left open
+
+
+def _left_open(repo: Repo, monkeypatch: pytest.MonkeyPatch) -> tuple[Harness, m.RunSummary]:
+    """A run whose perform stopped after its end and before troupe's turn at its gate: its
+    changes are pending, and its performance has no end."""
+    monkeypatch.setattr(gate, "troupes_step", lambda *_, **__: None)
+    made = Harness(repo)
+    run = gated(made, write("src/a.txt", "two\n"), OK)
+    assert (run.changes.state if run.changes else None) == "pending"
+    assert [topic for topic, _ in performance_events(made, run.performance_id)] == [STARTED]
+    return made, run
+
+
+@pytest.mark.parametrize(("settle", "outcome"), [("accept", "completed"), ("discard", "rejected")])
+def test_settling_a_run_whose_performance_was_left_open_ends_it_in_the_same_batch(
+    repo: Repo, monkeypatch: pytest.MonkeyPatch, settle: str, outcome: str
+) -> None:
+    made, run = _left_open(repo, monkeypatch)
+    if settle == "accept":
+        call(made, accept, m.AcceptRequest(run=run.performance_id))
+    else:
+        call(made, discard, m.DiscardRequest(run=run.performance_id))
+    [_, (topic, ended)] = performance_events(made, run.performance_id)
+    assert topic == ENDED
+    assert ended["state"]["outcome"] == outcome
+    settled = run_lines(made, run.run_id)[-1]
+    assert ended["batch"]["id"] == settled["batch"]["id"]
+    assert settled["state"]["lineage"]["approvals"] == []
+    assert ended["state"]["lineage"]["approvals"] == []
+    assert ended["state"]["lineage"]["performance"] == run.performance_id
