@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.5.0](https://github.com/troupe-run/troupe/compare/troupe-v0.4.0...troupe-v0.5.0) (2026-11-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **cli:** `troupe perform`'s success line on standard output is now `performance ID: run ID succeeded`, and no longer `run ID succeeded`. Its progress on standard error names the performance before the run. A script that reads the run id from the success line should take the id after `run`. Every command that takes a run id (`status`, `logs`, `diff`, `accept`, `discard`, `approve`, `reject`) also takes a performance id, or its first 8 characters, when the performance has one run. Each `troupe status` line starts with the performance id, then the run's first 8 characters.
+* **runs:** the protocol's lineage gains `performance`, required on run and performance events and refused on config events. Run.Started gains a required `step`. Two new event topics are added: Performance.Started and Performance.Ended. The client's run summary and perform's `started` update gain `performanceId` and `step`, and perform sends a new `performance-started` update. Runs recorded before this change aren't read, and aren't migrated.
+
+### Features
+
+* **cli:** say perform records a new performance ([3a0c925](https://github.com/troupe-run/troupe/commit/3a0c9256ae87f62398e035d016a63bb1f4d2bcdb))
+* **runs:** every perform records a performance, named in lineage ([82cb5f6](https://github.com/troupe-run/troupe/commit/82cb5f648d296ef2b9c2def22660d90db5a54023))
+
+
+### Bug Fixes
+
+* **runs:** end a performance left open when its run is settled ([7e10fb7](https://github.com/troupe-run/troupe/commit/7e10fb7e853348a5b931e69c8129faf3ccb01cf0))
+* **runs:** fail a performance whose run's changes weren't captured ([dce9faa](https://github.com/troupe-run/troupe/commit/dce9faaf65738a6f999de58d1ee5f84895be950b))
+* **runs:** refuse runs from before performances before perform runs ([ebaa2b6](https://github.com/troupe-run/troupe/commit/ebaa2b67436b697ad3e70e1fe3fb14655479b0e4))
+
+
+### Performance Improvements
+
+* **runs:** check for runs from before performances by their starts ([4e77cc2](https://github.com/troupe-run/troupe/commit/4e77cc2898e6fc9f3feb311bdf93e26f0dca53d4))
+
 ## [0.4.0](https://github.com/troupe-run/troupe/compare/troupe-v0.3.0...troupe-v0.4.0) (2026-11-27)
 
 
