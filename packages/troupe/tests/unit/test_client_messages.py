@@ -99,6 +99,8 @@ WORKSPACES = st.just({"kind": "theatre"}) | st.fixed_dictionaries(
     },
     optional={
         "prefix": st.sampled_from(["apps/", "apps/web/"]),
+        # A flow's later step was built on the step before (actor-sequences design D3).
+        "builtOn": RUN_IDS,
         # Absent until the worktree is made (account-for-every-worktree design D4).
         "clones": st.lists(
             st.sampled_from(["clonefile", "ficlone", "copyfile2", "copy", "symlink"]),
@@ -123,7 +125,16 @@ def run_changes(draw: st.DrawFn) -> dict[str, Any]:
     """A worktree run's changes, in each state, with what that state has."""
     state = draw(
         st.sampled_from(
-            ["waiting", "pending", "accepted", "discarded", "rejected", "none", "uncaptured"]
+            [
+                "waiting",
+                "pending",
+                "approved",
+                "accepted",
+                "discarded",
+                "rejected",
+                "none",
+                "uncaptured",
+            ]
         )
     )
     data: dict[str, Any] = {"state": state}
@@ -134,10 +145,17 @@ def run_changes(draw: st.DrawFn) -> dict[str, Any]:
     elif state == "none":
         data.update(counts)
     else:
-        data.update(counts, added=draw(st.integers(1, 9)), diff=draw(HASHES))
+        # A flow's later step records the diff so far beside its own diff, or alone when it
+        # changed nothing itself (actor-sequences design D4).
+        work = draw(st.sampled_from(["diff", "sofar", "both"]))
+        data.update(counts, added=draw(st.integers(1, 9)))
+        if work in ("diff", "both"):
+            data["diff"] = draw(HASHES)
+        if work in ("sofar", "both"):
+            data["sofar"] = draw(HASHES)
     if draw(st.booleans()):
         data["shared"] = draw(SHARED)
-    if state in ("accepted", "discarded", "rejected"):
+    if state in ("approved", "accepted", "discarded", "rejected"):
         data["settledAt"] = draw(TIMES)
     else:
         data["worktree"] = ".troupe/local/worktrees/0f8fad5b-d9cb-469f-a165-70867728950e"
@@ -150,7 +168,7 @@ ROLES = st.sampled_from(["troupe", "director"])
 APPROVERS = st.fixed_dictionaries(
     {
         "value": st.sampled_from([["troupe", "director"], ["director"]]),
-        "source": st.sampled_from(["actor", "default"]),
+        "source": st.sampled_from(["step", "actor", "default"]),
     }
 )
 ANSWERERS = st.sampled_from(

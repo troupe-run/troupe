@@ -280,11 +280,13 @@ class ChangesData(Message):
         if self.state in ("pending", "waiting") and (
             (self.diff is None and self.sofar is None) or self.worktree is None
         ):
-            raise fail(where, f"{self.state} changes have a diff and a worktree")
+            raise fail(where, f"{self.state} changes have a diff or a diff so far, and a worktree")
         if (self.state == "waiting") != (self.cue is not None):
             raise fail(where, "cue is present exactly when state is waiting")
-        if self.state in ("none", "uncaptured") and (self.diff is not None or not self.worktree):
-            raise fail(where, f"{self.state} changes have a worktree and no diff")
+        if self.state in ("none", "uncaptured") and (
+            self.diff is not None or self.sofar is not None or not self.worktree
+        ):
+            raise fail(where, f"{self.state} changes have a worktree and no diff or diff so far")
         if self.files is not None and self.state != "accepted":
             raise fail(where, "files are present only when the changes were accepted")
         settled = self.state in ("approved", "accepted", "discarded", "rejected")

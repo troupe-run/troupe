@@ -131,8 +131,46 @@ APPROVED_STEP: dict[str, Any] = {
 }
 
 
+STEP_WORKSPACE: dict[str, Any] = {
+    **WORKTREE_SUMMARY["workspace"],
+    "builtOn": "0f8fad5b-d9cb-469f-a165-70867728950e",
+}
+"""A flow's later step's worktree, built on the step before (actor-sequences design D3)."""
+
+
 ACCEPTED = [
     ("perform-result.schema.json", {"run": WORKTREE_SUMMARY}, "a worktree run with its approvers"),
+    # A flow's steps (spec: flows; actor-sequences design D3, D4, D5)
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                WORKTREE_SUMMARY,
+                workspace=STEP_WORKSPACE,
+                changes={"state": "approved", "diff": HASH, "sofar": HASH, "settledAt": AT},
+                approvers={"value": ["troupe"], "source": "step"},
+                gate=[
+                    {**APPROVED_STEP, "role": "troupe", "actor": {"kind": "system", "id": "core@b"}}
+                ],
+            )
+        },
+        "a flow's step let through, built on the step before, with step approvers",
+    ),
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                WORKTREE_SUMMARY,
+                workspace=STEP_WORKSPACE,
+                changes={
+                    "state": "pending",
+                    "sofar": HASH,
+                    "worktree": ".troupe/local/worktrees/x",
+                },
+            )
+        },
+        "a last step that changed nothing itself, pending with the diff so far alone",
+    ),
     (
         "perform-result.schema.json",
         {
@@ -406,7 +444,60 @@ REFUSED = [
             "performanceId": RUN_ID,
             "performed": {"kind": "flow", "name": "review"},
         },
-        "performance-started for a kind not yet built",
+        "performance-started without its step count",
+    ),
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                WORKTREE_SUMMARY,
+                changes={"state": "pending", "worktree": ".troupe/local/worktrees/x"},
+            )
+        },
+        "pending changes with neither a diff nor a diff so far",
+    ),
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                WORKTREE_SUMMARY,
+                changes={"state": "none", "sofar": HASH, "worktree": ".troupe/local/worktrees/x"},
+            )
+        },
+        "changes that are none with a diff so far",
+    ),
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                WORKTREE_SUMMARY,
+                changes={
+                    "state": "uncaptured",
+                    "sofar": HASH,
+                    "worktree": ".troupe/local/worktrees/x",
+                },
+            )
+        },
+        "uncaptured changes with a diff so far",
+    ),
+    (
+        "perform-result.schema.json",
+        {
+            "run": changed(
+                WORKTREE_SUMMARY,
+                changes={
+                    "state": "approved",
+                    "diff": HASH,
+                    "worktree": ".troupe/local/worktrees/x",
+                },
+            )
+        },
+        "approved changes with no settling time and a worktree",
+    ),
+    (
+        "perform-result.schema.json",
+        {"run": changed(WORKTREE_SUMMARY, approvers={"value": ["troupe"], "source": "flow"})},
+        "approvers from a source that isn't step, actor or default",
     ),
     # A run's gate (spec: gates; manual-gates design D6)
     (
