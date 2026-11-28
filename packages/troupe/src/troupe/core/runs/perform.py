@@ -27,7 +27,7 @@ import functools
 import hashlib
 import os
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
 from uuid import UUID, uuid4
@@ -72,6 +72,7 @@ from troupe.core.runs.performance import Performance
 from troupe.core.runs.plan import ContextFull as ContextFull
 from troupe.core.runs.plan import (
     PerformanceStart,
+    Performed,
     plan_steps,
 )
 from troupe.core.runs.plan import _from_config as _from_config
@@ -224,7 +225,7 @@ async def perform(
     synced = await asyncio.to_thread(
         functools.partial(sync_files, session, store, quiet, rehearse=True)
     )
-    _, planned = plan_steps(synced.merged, request.actor)
+    rehearsed, planned = plan_steps(synced.merged, request.actor)
     steps = [_ready(prepared, step, synced.merged) for step in planned]
     direction = request.direction or ""
     base: tuple[str, str] | None = None
@@ -234,7 +235,7 @@ async def perform(
     # recorded, rather than at troupe's turn at the gate, after the work (performances design D8).
     await asyncio.to_thread(refuse_runs_before_performances, store)
     if request.rehearse:
-        return m.PerformResult(rehearsal=_rehearsal(prepared, steps[0], direction, base))
+        return m.PerformResult(rehearsal=_rehearsed(prepared, rehearsed, steps, direction, base))
     # Now for real, just before the run: hand edits recorded, files written. The run uses the
     # config this leaves, and records its version.
     synced = await asyncio.to_thread(functools.partial(sync_files, session, store, send))
@@ -342,6 +343,25 @@ def _ready(prepared: _Prepared, step: _StepPlan, merged: Merged) -> _Ready:
         else None
     )
     return _Ready(step, list(argv), context_full, runtime)
+
+
+def _rehearsed(
+    prepared: _Prepared,
+    performed: Performed,
+    steps: list[_Ready],
+    direction: str,
+    base: tuple[str, str] | None,
+) -> m.Rehearsal:
+    """What performing would run: an actor's one run, or a flow's first step with every step
+    beside it, each told the flow's direction and its own (earlier steps' briefs are added only
+    when it runs, from what they did)."""
+    if performed.kind == "actor":
+        return _rehearsal(prepared, steps[0], direction, base)
+    each = [
+        _rehearsal(prepared, ready, direction_for(direction, ready.step.own_direction, []), base)
+        for ready in steps
+    ]
+    return replace(each[0], flow=performed.name, steps=each)
 
 
 def _rehearsal(

@@ -84,6 +84,22 @@ def _text(summary: dict[str, Any] | None) -> str:
 
 
 def _render_rehearsal(rehearsal: dict[str, Any], stdout: TextIO) -> None:
+    if "steps" in rehearsal:
+        # A flow: every step, each as its run would start (spec: flows, "Performing a flow runs
+        # its steps in order").
+        steps = rehearsal["steps"]
+        lines = [f"would perform the flow {rehearsal['flow']}, {len(steps)} steps"]
+        for index, step in enumerate(steps, start=1):
+            block = _rehearsal_lines(step)
+            lines.append(f"step {index}/{len(steps)}: {block[0]}")
+            lines += ["  " + line for line in block[1:]]
+    else:
+        lines = _rehearsal_lines(rehearsal)
+    lines.append("Rehearsal: nothing was started or recorded.")
+    print("\n".join(lines), file=stdout)
+
+
+def _rehearsal_lines(rehearsal: dict[str, Any]) -> list[str]:
     check = rehearsal["effectCheck"]
     expect = ", ".join(check["paths"]) if check["kind"] == "files" else "no effect check"
     stage = rehearsal["stage"]
@@ -103,8 +119,7 @@ def _render_rehearsal(rehearsal: dict[str, Any], stdout: TextIO) -> None:
     if "approvers" in rehearsal:
         approvers = rehearsal["approvers"]
         lines.append(f"  approvers: {', '.join(approvers['value'])} ({approvers['source']})")
-    lines.append("Rehearsal: nothing was started or recorded.")
-    print("\n".join(lines), file=stdout)
+    return lines
 
 
 def _effects(effects: dict[str, list[str]]) -> str:

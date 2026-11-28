@@ -448,3 +448,33 @@ def test_a_steps_audit_judges_only_its_own_changes(repo: Repo) -> None:
     last = run_flow(made, "narrowed")
     assert last.outcome == "succeeded"
     assert (repo.path / "src" / "b.txt").read_text(encoding="utf-8") == "narrow\n"
+
+
+def test_a_flows_rehearsal_shows_every_step_and_records_nothing(repo: Repo) -> None:
+    made = Harness(repo)
+    three_steps(made)
+    flow(
+        made,
+        "review",
+        [
+            {"actor": "writer"},
+            {"actor": "reviewer", "direction": "Review it.", "approvers": ["director"]},
+            {"actor": "tester"},
+        ],
+    )
+    before = [line["topic"] for line in recorded_lines(repo.path)]
+    parsed = m.PerformRequest.from_data({"actor": "review", "rehearse": True})
+    result = asyncio.run(perform(parsed, made.session(), made.send, backends=made.backends()))
+    rehearsal = result.rehearsal
+    assert rehearsal is not None
+    assert rehearsal.flow == "review"
+    assert rehearsal.steps is not None
+    assert [step.actor for step in rehearsal.steps] == ["writer", "reviewer", "tester"]
+    assert rehearsal.actor == "writer"
+    approvers = rehearsal.steps[1].approvers
+    assert approvers is not None
+    assert approvers.to_data() == {"value": ["director"], "source": "step"}
+    # Each step's direction is its own on top of the flow's, so they differ.
+    directions = [step.direction for step in rehearsal.steps]
+    assert directions[1] != directions[0]
+    assert [line["topic"] for line in recorded_lines(repo.path)] == before

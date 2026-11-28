@@ -174,6 +174,27 @@ ACCEPTED = [
         "a rehearsal",
     ),
     (
+        "perform-result.schema.json",
+        {
+            "rehearsal": {
+                **(
+                    step := {
+                        "actor": "writer",
+                        "runner": "scripted",
+                        "stage": SUMMARY["stage"],
+                        "effectCheck": {"kind": "none"},
+                        "effects": {"write": ["**"], "delete": [], "move": []},
+                        "config": [HASH],
+                        "workspace": {"kind": "worktree", "base": "c0ffee" + "0" * 34},
+                    }
+                ),
+                "flow": "review",
+                "steps": [step, {**step, "actor": "reviewer"}],
+            }
+        },
+        "a flow's rehearsal",
+    ),
+    (
         "perform-update.schema.json",
         {"kind": "started", "runId": RUN_ID, "performanceId": RUN_ID, "step": 1, "actor": "tester"},
         "started",
@@ -477,6 +498,27 @@ REFUSED = [
         "sync-result.schema.json",
         {"edits": [], "files": [changed(MARKED, resolve="yes")], "notices": []},
         "resolve that isn't a boolean",
+    ),
+    (
+        "perform-result.schema.json",
+        {
+            "rehearsal": {
+                **(
+                    inner := {
+                        "actor": "writer",
+                        "runner": "scripted",
+                        "stage": SUMMARY["stage"],
+                        "effectCheck": {"kind": "none"},
+                        "effects": {"write": [], "delete": [], "move": []},
+                        "config": [HASH],
+                        "workspace": {"kind": "theatre"},
+                    }
+                ),
+                "flow": "review",
+                "steps": [{**inner, "flow": "nested", "steps": [inner]}],
+            }
+        },
+        "a step's rehearsal holding a flow of its own",
     ),
     ("perform-request.schema.json", changed(PERFORM, actor="Tester"), "an actor in capitals"),
     ("perform-request.schema.json", changed(PERFORM, actor="1tester"), "an actor from a digit"),

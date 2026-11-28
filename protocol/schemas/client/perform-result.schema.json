@@ -49,7 +49,7 @@
     },
     "rehearsal": {
       "title": "Rehearsal",
-      "description": "What a perform would run, after every check it makes before starting the runner.",
+      "description": "What a perform would run, after every check it makes before starting the runner. For a flow, the fields are its first step's, and steps lists every step.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -138,7 +138,47 @@
         "approvers": {
           "description": "The approvers the run's gate would try, in order, and where they came from. Absent: the run would work in the theatre, which has no gate.",
           "$ref": "run.schema.json#/$defs/approvers"
+        },
+        "flow": {
+          "description": "The flow that would be performed. Absent: an actor would be.",
+          "$ref": "run.schema.json#/$defs/actorName"
+        },
+        "steps": {
+          "description": "Each of the flow's steps, in order, as its run would start: its actor, runner, effects, workspace, runtime and approvers, every check made. Its direction is the flow's and the step's own; what earlier steps leave is added when the step runs. Absent: an actor would be performed.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/rehearsal"
+              },
+              {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "flow"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "steps"
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          }
         }
+      },
+      "dependentRequired": {
+        "flow": [
+          "steps"
+        ],
+        "steps": [
+          "flow"
+        ]
       }
     }
   }

@@ -290,6 +290,28 @@ def test_a_rehearsal_says_what_would_run_and_would_change(core: StandIn) -> None
     assert ran.stderr == ""
 
 
+def test_a_flows_rehearsal_shows_every_step_as_its_run_would_start(core: StandIn) -> None:
+    second = {
+        **REHEARSAL,
+        "actor": "reviewer",
+        "approvers": {"value": ["director"], "source": "step"},
+    }
+    rehearsal = {**REHEARSAL, "flow": "review", "steps": [REHEARSAL, second]}
+    core.reply("perform", PerformResult.from_data({"rehearsal": rehearsal}))
+    ran = core.run("perform", "review", "--rehearse")
+    assert ran.code == ExitCode.WOULD_CHANGE
+    block = WOULD[1:-1]
+    assert ran.out == [
+        "would perform the flow review, 2 steps",
+        "step 1/2: would perform lead",
+        *["  " + line for line in block],
+        "step 2/2: would perform reviewer",
+        *["  " + line for line in block],
+        "    approvers: director (step)",
+        "Rehearsal: nothing was started or recorded.",
+    ]
+
+
 def test_a_rehearsal_in_the_theatre_with_no_check_or_effects_and_a_runtime(
     core: StandIn,
 ) -> None:

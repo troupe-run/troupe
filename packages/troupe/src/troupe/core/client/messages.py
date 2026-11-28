@@ -631,6 +631,18 @@ class Rehearsal(Message):
     runtime: ResolvedRuntime | None = json_field("runtime", default=None)
     approvers: ApproversData | None = json_field("approvers", default=None)
     """None for a run in the theatre, which has no gate."""
+    flow: str | None = json_field("flow", default=None, pattern=ACTOR_NAME)
+    """The flow that would be performed; None for an actor."""
+    steps: list["Rehearsal"] | None = json_field("steps", default=None, min_items=1)
+    """Each of a flow's steps as its run would start (spec: flows, "Performing a flow runs its
+    steps in order"); None for an actor. The fields above are the first step's."""
+
+    def _check(self, where: str) -> None:
+        if (self.flow is None) != (self.steps is None):
+            raise fail(where, "flow and steps are present together")
+        for step in self.steps or ():
+            if step.flow is not None or step.steps is not None:
+                raise fail(where, "a step's rehearsal holds no flow or steps of its own")
 
 
 @dataclass(frozen=True)

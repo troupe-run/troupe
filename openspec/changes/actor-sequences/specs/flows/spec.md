@@ -53,13 +53,18 @@ merge that leaves both SHALL be a conflict.
 ### Requirement: Performing a flow runs its steps in order
 `troupe perform <name>` SHALL perform the flow when `<name>` is a flow, recording one performance whose steps are the
 flow's steps, and running each step's actor as a run, one after another, until the last step's gate, a gate that
-waits, or a step that doesn't succeed. A rehearsal SHALL check every step's actor and run nothing; one refusal refuses
-the whole flow.
+waits, or a step that doesn't succeed. A rehearsal SHALL check every step's actor, show each step as its run would
+start, and run nothing; one refusal refuses the whole flow.
 
 #### Scenario: A flow that runs to the end
 - **WHEN** a person performs the flow `review` (writer, reviewer), each run succeeds and troupe approves each gate
 - **THEN** one performance is recorded with two steps, writer's run is step 1 and reviewer's is step 2, and the
   performance ends `completed`
+
+#### Scenario: A rehearsal shows every step
+- **WHEN** a person rehearses the flow `review` (writer, then reviewer with approvers `[director]`)
+- **THEN** it shows both steps, each with its actor, runner, effects, workspace and approvers, reviewer's approvers
+  `director` from the step, and nothing is recorded
 
 #### Scenario: A rehearsal with one refused step
 - **WHEN** a person rehearses a flow whose second step's runtime has no credential
