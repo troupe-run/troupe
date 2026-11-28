@@ -31,7 +31,7 @@ from troupe.core.client.session import Session
 from troupe.core.errors import TroupeError
 from troupe.core.events import EventStore, RecordedEvent
 from troupe.core.notices import Notice
-from troupe.core.runs.aggregate import TOPICS
+from troupe.core.runs.aggregate import STARTED, TOPICS
 from troupe.core.runs.backends import PERFORM_PID_FILE, Backends, lease_dir
 from troupe.core.runs.projections import RunView, fold_runs
 from troupe.platform import locks, processes
@@ -122,6 +122,19 @@ def _recordings(store: EventStore, topics: tuple[str, ...] = TOPICS) -> Iterator
         for _, recording in page:
             yield recording
         low = page[-1][0] + 1
+
+
+def refuse_runs_before_performances(store: EventStore) -> None:
+    """Refuse a store holding a run recorded before performances, reading only runs' starts: what
+    perform checks before it records or runs anything, without folding every run's events
+    (performances design D8)."""
+    older = [
+        str(recording.stream)
+        for recording in _recordings(store, (STARTED,))
+        if "performance" not in (recording.lineage or {})
+    ]
+    if older:
+        raise _recorded_before_performances(store, older)
 
 
 def read_runs(store: EventStore) -> dict[str, RunView]:
