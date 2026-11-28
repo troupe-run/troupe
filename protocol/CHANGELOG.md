@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0](https://github.com/troupe-run/troupe/compare/protocol-v0.4.0...protocol-v0.5.0) (2026-11-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **runs:** the protocol's lineage gains `performance`, required on run and performance events and refused on config events. Run.Started gains a required `step`. Two new event topics are added: Performance.Started and Performance.Ended. The client's run summary and perform's `started` update gain `performanceId` and `step`, and perform sends a new `performance-started` update. Runs recorded before this change aren't read, and aren't migrated.
+
+### Features
+
+* **runs:** every perform records a performance, named in lineage ([82cb5f6](https://github.com/troupe-run/troupe/commit/82cb5f648d296ef2b9c2def22660d90db5a54023))
+
+
+### Bug Fixes
+
+* **runs:** end a performance left open when its run is settled ([7e10fb7](https://github.com/troupe-run/troupe/commit/7e10fb7e853348a5b931e69c8129faf3ccb01cf0))
+* **runs:** fail a performance whose run's changes weren't captured ([dce9faa](https://github.com/troupe-run/troupe/commit/dce9faaf65738a6f999de58d1ee5f84895be950b))
+
 ## [0.4.0](https://github.com/troupe-run/troupe/compare/protocol-v0.3.0...protocol-v0.4.0) (2026-11-27)
 
 
