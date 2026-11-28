@@ -339,7 +339,7 @@ def test_what_each_run_start_asks_for(stage: Stage) -> None:
     every = [s for c in starts for s in c]
     for start in every:
         assert start["direction"] == "conformance check"
-        assert start["workspace"] == "/workspace"
+        assert start["workspace"] == str(Path("/workspace"))
         assert start["limits"] == {"eventMaxBytes": LIMITS.event_max_bytes}
         assert start["effects"] == p.READ_ONLY_DECLARATION.to_data()
         assert start["onContextFull"] == "fail"
