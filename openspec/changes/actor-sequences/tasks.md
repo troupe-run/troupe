@@ -28,7 +28,7 @@ Each group lands as its own push on one pull request, in this order, and is revi
 
 ## 3. Performing a flow
 
-- [ ] 3.1 Split `perform` into a plan and a driver (D2) with every existing perform test unchanged and passing. Verify:
+- [x] 3.1 Split `perform` into a plan and a driver (D2) with every existing perform test unchanged and passing. Verify:
   the full perform and run test suites pass with no test edited for behaviour.
 - [ ] 3.2 Resolve `troupe perform <flow>` to a plan of its steps, with every refusal checked over every step before
   anything is recorded, and a rehearsal covering all of them. Verify: integration tests for a two-step flow's records,
