@@ -69,7 +69,7 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
   keeps them and stops troupe asking. [Undoing an edit](../stagecraft/hand-edit-config.md#undoing-an-edit) says
   when each works.
 
-A run is named by its full id or by its first 8 or more characters. [Performances and
+A run is named by its full id, its performance's, or the first 8 or more characters of either. [Performances and
 runs](../the-company/performances-and-runs.md) describes runs, their states and what is recorded.
 
 **`perform` names an actor, and config says the rest:** its runner (`anthropic`, `claude-code`, `mistralrs`,

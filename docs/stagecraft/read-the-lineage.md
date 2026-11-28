@@ -16,9 +16,9 @@ through its [gate](../the-company/gates-and-decisions.md). Saying which person h
 troupe status <run>
 ```
 
-`troupe status` with a run's id, or its first 8 characters, shows the run: its actor, who started it, its runner,
+`troupe status` with a run's id, or its first 8 characters, shows the run: its performance, its actor, who started it, its runner,
 its stage, its state, its outcome and error, what the audit of its changes found, how many events it has, its times,
-and references to its transcript and standard error. Without an id, it lists the most recent runs, newest first. A
+and references to its transcript and standard error. Without an id, it lists the most recent performances, newest first, each with its run. A
 run whose `troupe perform` was killed before it recorded an end shows as `interrupted`
 ([A run's state](../the-company/performances-and-runs.md#a-runs-state)).
 

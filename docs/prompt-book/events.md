@@ -12,9 +12,10 @@ back from these events.
 Every event carries its [lineage](../the-company/lineage.md): who made it, through what, when, why, as part of which
 command, with whose approval, and in what version-control state. Lineage is listed once, at the end.
 
-Today troupe records config changes and runs. A run records its first event, the worktree made for it if it has
-one, one event for each thing its runner reports, the notices troupe raised while it went, and its last event.
-Keeping or discarding its changes is an event too. More events arrive as troupe grows, each listed here as it
+Today troupe records config changes, performances and runs. A performance records its start and its end, and each
+of its steps is a run. A run records its first event, the worktree made for it if it has one, one event for each
+thing its runner reports, the notices troupe raised while it went, and its last event. Keeping or discarding its
+changes is an event too. More events arrive as troupe grows, each listed here as it
 does. The tables below are generated from troupe's schemas, so they can't drift from what troupe writes.
 
 ## The events
@@ -26,7 +27,7 @@ The payload of one config change (topic troupe.core.config.aggregate:Config.Chan
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names no performance: a config event isn't part of one. |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names no performance: config isn't part of one. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `changes` | list of any or object (Rename entry) | Yes | Each value the change sets or unsets, at most once each. A change that would change nothing isn't recorded. |
 | `files` | list of object (File written) | Yes | Each config file the change wrote or removed, so troupe can tell its own files from a person's. |
@@ -37,7 +38,7 @@ The payload of config's settling event (topic troupe.core.config.aggregate:Confi
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names no performance: a config event isn't part of one. |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names no performance: config isn't part of one. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `topic` | `"troupe.core.config.aggregate:Config"` | Yes | The aggregate whose stream the event settles: config's. |
 | `state` | object | Yes | The settled state: the config the merge worked out from every head. |
@@ -48,9 +49,9 @@ The payload of a performance's end (topic troupe.core.runs.performance:Performan
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names the performance (spec: lineage, "Lineage names an event's performance"). |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names this performance. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
-| `outcome` | one of `"completed"`, `"failed"`, `"rejected"`, `"cancelled"` | Yes | How it ended: completed when every step ran and its work was kept or there was none, failed when a step didn't succeed, rejected when its work was rejected at a gate, cancelled when a step was cancelled. |
+| `outcome` | one of `"completed"`, `"failed"`, `"rejected"`, `"cancelled"` | Yes | How it ended: completed when every step ran and its work was kept or there was none, failed when a step didn't succeed or its changes couldn't be captured, rejected when its work was rejected at a gate, cancelled when a step was cancelled. |
 
 ### Performance.Started
 
@@ -58,7 +59,7 @@ The payload of a performance's first event (topic troupe.core.runs.performance:P
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names the performance (spec: lineage, "Lineage names an event's performance"). |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names this performance. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `originator_topic` | `"troupe.core.runs.performance:Performance"` | Yes | The event-sourcing library's name for the aggregate the stream holds. |
 | `performance_id` | string | Yes | The performance's id, which is also its stream's. |
@@ -73,7 +74,7 @@ The payload of a run's acceptance (topic troupe.core.runs.aggregate:Run.ChangesA
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names the run's performance (spec: lineage, "Lineage names an event's performance"). |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names the performance the run is a step of. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `diff` | string | Yes | The diff that was applied: the reference the run's end recorded. |
 | `files` | list of string | Yes | The files it changed, relative to the repository's top level. |
@@ -84,7 +85,7 @@ The payload of a run's discard (topic troupe.core.runs.aggregate:Run.ChangesDisc
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names the run's performance (spec: lineage, "Lineage names an event's performance"). |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names the performance the run is a step of. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 
 ### Run.ChangesRejected
@@ -93,7 +94,7 @@ The payload of a rejection at a worktree run's gate (topic troupe.core.runs.aggr
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names the run's performance (spec: lineage, "Lineage names an event's performance"). |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names the performance the run is a step of. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `role` | one of `"troupe"`, `"director"` | Yes | The role that rejected, which the cue was for. |
 
@@ -103,7 +104,7 @@ The payload of a cue at a worktree run's gate (topic troupe.core.runs.aggregate:
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names the run's performance (spec: lineage, "Lineage names an event's performance"). |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names the performance the run is a step of. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `role` | one of `"troupe"`, `"director"` | Yes | The role the cue is for. |
 | `brief` | object (Brief) | Yes | What the role needs to answer: whose run it was, how it ended, what it changed and where the diff is, and why the cue came to this role. |
@@ -114,7 +115,7 @@ The payload of a run's last event (topic troupe.core.runs.aggregate:Run.Ended): 
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names the run's performance (spec: lineage, "Lineage names an event's performance"). |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names the performance the run is a step of. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `outcome` | object | Yes | How the run ended, as the run host derived it from what the runner reported, never from its exit code alone: the outcome, whether the runner exited, was killed or never started, the limits it ran under, and what the audit of its changes found. |
 | `recording` | object (A run event wasn't recorded) or object (A notice wasn't recorded) | No | What wasn't recorded first, and why: the first run event, by its seq, or a notice troupe raised for the run, by its code. Absent: recording didn't fail. |
@@ -126,7 +127,7 @@ The payload of a pass at a worktree run's gate (topic troupe.core.runs.aggregate
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names the run's performance (spec: lineage, "Lineage names an event's performance"). |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names the performance the run is a step of. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `approver` | one of `"troupe"`, `"director"` | Yes | The approver that passed. |
 | `to` | one of `"troupe"`, `"director"` | Yes | The approver the gate went to next. |
@@ -139,7 +140,7 @@ The payload of one notice troupe raised for a run (topic troupe.core.runs.aggreg
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names the run's performance (spec: lineage, "Lineage names an event's performance"). |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names the performance the run is a step of. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `notice` | object (Notice fields) | Yes | The notice as troupe raised it and sent it live, with the run's credential masked. |
 
@@ -149,7 +150,7 @@ The payload of one run event (topic troupe.core.runs.aggregate:Run.Reported): th
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names the run's performance (spec: lineage, "Lineage names an event's performance"). |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names the performance the run is a step of. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `seq` | integer | Yes | The runner's number for the event, counting from 0. Each run event is recorded in seq order, and one that isn't the next is refused. |
 | `event` | object (init) or object (turn) or object (tool_call) or object (tool_result) or object (retry) or object (context) or object (log) or object (served_model) or object (result) or object (oversized) | Yes | A run event, or the oversized event troupe writes in place of one larger than the maximum event size. |
@@ -160,7 +161,7 @@ The payload of a run's first event (topic troupe.core.runs.aggregate:Run.Started
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names the run's performance (spec: lineage, "Lineage names an event's performance"). |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names the performance the run is a step of. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `originator_topic` | `"troupe.core.runs.aggregate:Run"` | Yes | The event-sourcing library's name for the aggregate the stream holds. |
 | `run_id` | string | Yes | Chosen by troupe for each run attempt: a UUID in canonical lowercase form. |
@@ -182,7 +183,7 @@ The payload of a worktree run's second event (topic troupe.core.runs.aggregate:R
 
 | Field | Holds | Always there | What it is |
 |---|---|---|---|
-| `lineage` | any | Yes | Its lineage names the run's performance (spec: lineage, "Lineage names an event's performance"). |
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names the performance the run is a step of. |
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `clones` | list of one of `"clonefile"`, `"ficlone"`, `"copyfile2"`, `"copy"`, `"symlink"` | Yes | The clone mechanisms used for the files that matched HEAD, sorted. Empty: every file was checked out. |
 

@@ -54,7 +54,7 @@ performance of one step.
 A performance's end SHALL be recorded once nothing more will happen in it, with its outcome:
 
 - `completed`: every step ran, and the work was kept or there was none.
-- `failed`: a step didn't succeed.
+- `failed`: a step didn't succeed, or its changes couldn't be captured.
 - `rejected`: its work was rejected at a gate.
 - `cancelled`: a step was cancelled.
 
@@ -72,6 +72,10 @@ A performance whose work waits at a gate, or whose `perform` stopped without an 
 - **WHEN** a person performs an actor whose run fails
 - **THEN** the performance ends `failed`, in the same batch as the run's end, and the run's changes still wait for
   accept or discard
+
+#### Scenario: A run whose changes couldn't be captured
+- **WHEN** a worktree run succeeds and capturing its changes fails, so they're `uncaptured`
+- **THEN** the performance ends `failed`, in the same batch as the run's end, since its work can never reach its gate
 
 #### Scenario: A cancelled run
 - **WHEN** a person presses Ctrl-C during a run

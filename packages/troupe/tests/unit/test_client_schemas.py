@@ -346,6 +346,46 @@ def files(*paths: str) -> dict[str, Any]:
 
 
 REFUSED = [
+    # Performances (spec: performances, runs; performances design D7)
+    (
+        "perform-result.schema.json",
+        {"run": {k: v for k, v in SUMMARY.items() if k != "performanceId"}},
+        "a run summary without its performance",
+    ),
+    (
+        "perform-result.schema.json",
+        {"run": {k: v for k, v in SUMMARY.items() if k != "step"}},
+        "a run summary without its step",
+    ),
+    (
+        "perform-result.schema.json",
+        {"run": {**SUMMARY, "step": 0}},
+        "a run summary with step 0",
+    ),
+    (
+        "perform-update.schema.json",
+        {"kind": "started", "runId": RUN_ID, "step": 1},
+        "started without its performance",
+    ),
+    (
+        "perform-update.schema.json",
+        {"kind": "started", "runId": RUN_ID, "performanceId": RUN_ID},
+        "started without its step",
+    ),
+    (
+        "perform-update.schema.json",
+        {"kind": "performance-started", "performanceId": RUN_ID},
+        "performance-started without what was performed",
+    ),
+    (
+        "perform-update.schema.json",
+        {
+            "kind": "performance-started",
+            "performanceId": RUN_ID,
+            "performed": {"kind": "flow", "name": "review"},
+        },
+        "performance-started for a kind not yet built",
+    ),
     # A run's gate (spec: gates; manual-gates design D6)
     (
         "perform-result.schema.json",

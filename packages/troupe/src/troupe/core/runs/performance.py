@@ -30,12 +30,15 @@ Outcome = Literal["completed", "failed", "rejected", "cancelled"]
 OUTCOMES: tuple[Outcome, ...] = ("completed", "failed", "rejected", "cancelled")
 
 
-def outcome_of(run_outcome: str | None) -> Outcome:
+def outcome_of(run_outcome: str | None, changes: dict[str, Any] | None = None) -> Outcome:
     """A performance's outcome from its run's, for a run that ended with no gate to follow:
     ``succeeded`` is ``completed``, ``cancelled`` is ``cancelled``, and every other is ``failed``
-    (performances design D3)."""
+    (performances design D3). A run that succeeded but whose changes couldn't be captured is
+    ``failed`` too: its work can never reach its gate, and only a discard settles it (owner,
+    2026-11-28, troupe#545)."""
     if run_outcome == "succeeded":
-        return "completed"
+        uncaptured = changes is not None and "error" in changes
+        return "failed" if uncaptured else "completed"
     if run_outcome == "cancelled":
         return "cancelled"
     return "failed"

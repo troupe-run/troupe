@@ -263,6 +263,12 @@ class _Schemas:
             return f"`{json.dumps(resolved['const'])}`"
         if "enum" in resolved:
             return "one of " + ", ".join(f"`{json.dumps(value)}`" for value in resolved["enum"])
+        if "allOf" in resolved and "type" not in resolved:
+            # A reference narrowed by a rule beside it (lineage that must or mustn't name a
+            # performance) holds what the reference holds.
+            referenced = [each for each in resolved["allOf"] if "$ref" in each]
+            if referenced:
+                return self.kind(referenced[0], where)
         for combinator in ("oneOf", "anyOf"):
             if combinator in resolved:
                 kinds = dict.fromkeys(self.kind(each, where) for each in resolved[combinator])

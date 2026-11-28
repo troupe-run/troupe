@@ -22,7 +22,7 @@
           ]
         }
       ],
-      "description": "Its lineage names the run's performance (spec: lineage, \"Lineage names an event's performance\")."
+      "description": "Where the event came from. It names the performance the run is a step of."
     },
     "timestamp": {
       "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"

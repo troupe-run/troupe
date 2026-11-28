@@ -552,7 +552,7 @@ class _Recorder:
             # No gate follows, so nothing more will happen in the performance: it ends with the
             # run, in the same batch (performances design D3).
             performance = self._performance()
-            performance.end(outcome_of(outcome.get("outcome")))
+            performance.end(outcome_of(outcome.get("outcome"), changes))
             over = performance.collect_events()
             self.store.record_with_lineages(
                 [*ended, *over],
