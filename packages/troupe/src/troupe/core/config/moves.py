@@ -1,8 +1,8 @@
-"""Renaming an actor or runtime: what a rename may do, the files it moves, and the hand moves a
-sweep pairs (spec: config-renames, "Only a whole actor or runtime can be renamed", "A rename needs
-its source and refuses an existing target", "A built-in runtime's name is never renamed to or from";
-config-hand-edits, "A hand move with the same values is a rename", "An ambiguous hand move is
-refused"; config-mv design D5, D6, D7)."""
+"""Renaming an actor, runtime or flow: what a rename may do, the files it moves, and the hand moves
+a sweep pairs (spec: config-renames, "Only a whole actor or runtime can be renamed", "A rename
+needs its source and refuses an existing target", "A built-in runtime's name is never renamed to
+or from"; config-hand-edits, "A hand move with the same values is a rename", "An ambiguous hand
+move is refused"; config-mv design D5, D6, D7)."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -119,7 +119,8 @@ def moved_files(entries: Sequence[Mapping[str, Any]]) -> dict[str, str]:
 
 def already_moved(troupe_dir: Path, path: Sequence[str], source: Sequence[str]) -> bool:
     """Whether a person has already moved ``source``'s files to ``path``'s names by hand: none of
-    the old files is there, and the new main file (an actor's .yaml, a runtime's file) is."""
+    the old files is there, and the new main file (an actor's .yaml, a runtime's or a flow's
+    file) is."""
     if len(path) != 2 or len(source) != 2 or path[0] not in KINDS or source[0] != path[0]:
         return False
     old = files_of(source[0], source[1])

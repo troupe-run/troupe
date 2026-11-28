@@ -105,7 +105,7 @@ RENAMED_FROM = "renamedFrom"
 @dataclass(frozen=True)
 class Rename:
     """In ``change``'s operations, the value that renames the group at ``source`` to the
-    operation's path, a whole actor or runtime of the same kind (config-mv design D1)."""
+    operation's path, a whole actor, runtime or flow of the same kind (config-mv design D1)."""
 
     source: tuple[str, ...]
 
