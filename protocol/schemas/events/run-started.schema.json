@@ -177,6 +177,10 @@
         "dirty": {
           "description": "Whether the theatre had changes that differ from HEAD, which the run didn't see.",
           "type": "boolean"
+        },
+        "builtOn": {
+          "description": "The run of the step before, whose work so far this step's worktree was built on: the worktree is made at base, then the performance's diff so far is applied to it. Absent: the run is its performance's first step, or its only one.",
+          "$ref": "../runner/jsonrpc.schema.json#/$defs/runId"
         }
       }
     }

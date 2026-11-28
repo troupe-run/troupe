@@ -286,6 +286,10 @@
               "description": "The diff's artifact reference: git's binary diff from the base commit. Absent: the run changed nothing.",
               "$ref": "../lineage.schema.json#/$defs/hash"
             },
+            "sofar": {
+              "description": "The performance's diff so far, from its base commit through this step, as an artifact reference: what the flow's last gate lands, and what accepting a stopped flow applies. Present for a flow's step after the first once the performance has changes. Absent: the run is its performance's only or first step, whose diff is the performance's own, or nothing has changed so far.",
+              "$ref": "../lineage.schema.json#/$defs/hash"
+            },
             "added": {
               "type": "integer",
               "minimum": 0

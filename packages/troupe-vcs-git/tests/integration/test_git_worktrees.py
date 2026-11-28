@@ -491,3 +491,56 @@ def test_a_deleted_tag_is_reported_as_removed(repo: Repo) -> None:
     before = git.shared_state()
     repo.git("tag", "-d", "v0")
     assert before.compare(git.shared_state()).refs == (SharedChange("refs/tags/v0", "removed"),)
+
+
+# Requirement: A flow's step works in a worktree built on the steps before it (spec: flows; design
+# D3 of actor-sequences: apply_in_worktree)
+
+
+def _first_steps_diff(repo: Repo, tmp_path: Path) -> Path:
+    """The diff a first step captured: it changed src/a.txt and added out/one.txt."""
+    git, path, base = worktree(repo, tmp_path, name="first")
+    (path / "src" / "a.txt").write_text("from step one\n", encoding="utf-8")
+    (path / "out").mkdir()
+    (path / "out" / "one.txt").write_text("one\n", encoding="utf-8")
+    out = tmp_path / "first.diff"
+    git.capture(path, base, (".troupe",), out)
+    return out
+
+
+def test_applying_a_diff_inside_a_worktree_returns_the_tree_it_leaves(
+    repo: Repo, tmp_path: Path
+) -> None:
+    first = _first_steps_diff(repo, tmp_path)
+    git, path, base = worktree(repo, tmp_path, name="second")
+    baseline = git.apply_in_worktree(path, first)
+    assert (path / "src" / "a.txt").read_text(encoding="utf-8") == "from step one\n"
+    assert (path / "out" / "one.txt").read_text(encoding="utf-8") == "one\n"
+    assert baseline == git_in(repo, path, "write-tree").strip()
+    assert baseline != base
+
+
+def test_a_capture_against_the_applied_baseline_holds_only_the_later_change(
+    repo: Repo, tmp_path: Path
+) -> None:
+    first = _first_steps_diff(repo, tmp_path)
+    git, path, base = worktree(repo, tmp_path, name="second")
+    baseline = git.apply_in_worktree(path, first)
+    (path / "src" / "b.txt").write_text("from step two\n", encoding="utf-8")
+    own = git.capture(path, baseline, (".troupe",), tmp_path / "own.diff")
+    assert (own.added, own.modified, own.deleted) == ((), ("src/b.txt",), ())
+    sofar = git.capture(path, base, (".troupe",), tmp_path / "sofar.diff")
+    assert (sofar.added, sofar.modified) == (("out/one.txt",), ("src/a.txt", "src/b.txt"))
+
+
+def test_a_diff_that_doesnt_apply_inside_a_worktree_changes_nothing(
+    repo: Repo, tmp_path: Path
+) -> None:
+    first = _first_steps_diff(repo, tmp_path)
+    git, path, _ = worktree(repo, tmp_path, name="second")
+    (path / "src" / "a.txt").write_text("something else\n", encoding="utf-8")
+    before = tree_files(path)
+    with pytest.raises(TroupeError) as caught:
+        git.apply_in_worktree(path, first)
+    assert caught.value.code == "vcs.failed"
+    assert tree_files(path) == before

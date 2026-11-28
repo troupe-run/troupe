@@ -250,6 +250,25 @@ class Worktrees:
             self._git(top, "apply", str(diff))
         return applicability.files
 
+    def apply_in_worktree(self, path: Path, diff: Path) -> str:
+        """``git apply`` inside the worktree, all or nothing, then the tree it leaves."""
+        if diff.stat().st_size:
+            checked = self._git(path, "apply", "--check", str(diff), allow=(0, 1))
+            if checked.returncode != 0:
+                failing = _failing(checked.stderr.decode("utf-8", "replace"))
+                raise TroupeError(
+                    "vcs.failed",
+                    problem="git apply --check refused the diff inside the worktree, so nothing "
+                    "was applied: " + (", ".join(failing) or "it doesn't apply"),
+                    fix="This is a fault in troupe: the diff was captured from the same base. "
+                    "Report it at https://github.com/troupe-run/troupe/issues",
+                    path=str(path),
+                    details={"command": f"git apply --check {diff}", "exitStatus": 1},
+                )
+            self._git(path, "apply", str(diff))
+        self._git(path, "add", "-A")
+        return self._git(path, "write-tree").stdout.decode("ascii").strip()
+
     def remove_worktree(self, path: Path) -> None:
         theatre = self.adapter.theatre
         # A git worktree add killed part-way leaves its entry locked, and prune skips a locked

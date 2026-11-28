@@ -19,10 +19,10 @@ Each group lands as its own push on one pull request, in this order, and is revi
 
 ## 2. Worktrees built on the work so far
 
-- [ ] 2.1 Add `apply_in_worktree(path, diff) -> baseline` to the VCS port and the git adapter (D3), refusing a diff
+- [x] 2.1 Add `apply_in_worktree(path, diff) -> baseline` to the VCS port and the git adapter (D3), refusing a diff
   that doesn't apply, all or nothing. Verify: adapter tests on a worktree with an applied diff, the returned baseline
   equal to `write-tree`, and a failing diff leaving the worktree unchanged.
-- [ ] 2.2 Capture a step's `sofar` diff against the performance's base beside its own diff (D4), and add `sofar` to
+- [x] 2.2 Capture a step's `sofar` diff against the performance's base beside its own diff (D4), and add `sofar` to
   `run-ended`'s changes and `builtOn` to the run start's workspace. Verify: workspace tests for two captures, and
   schema tests for the new fields.
 

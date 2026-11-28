@@ -295,6 +295,13 @@ class Vcs(Protocol):
         changed. Refused, changing nothing, when any part doesn't apply."""
         ...
 
+    def apply_in_worktree(self, path: Path, diff: Path) -> str:
+        """Apply the diff at ``diff`` inside the worktree at ``path``, all or nothing, and return
+        the tree it leaves: the baseline the next capture of that worktree is taken from, so a
+        flow's step diffs only its own changes (actor-sequences design D3). Refused with
+        vcs.failed, changing nothing, when any part doesn't apply."""
+        ...
+
     def remove_worktree(self, path: Path) -> None:
         """Remove the worktree at ``path`` and its registration, also when the directory is
         already gone."""
