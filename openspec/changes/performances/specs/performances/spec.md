@@ -127,3 +127,20 @@ exactly one; otherwise the command SHALL be refused with `performance.several-ru
 - **WHEN** a run's id and another performance's id both start with `1a2b3c4d`, and a person asks for
   `status 1a2b3c4d`
 - **THEN** it is refused with `run.ambiguous-id`, listing the run and the performance
+
+### Requirement: A run recorded before performances is refused with its fix
+Reading runs back SHALL refuse a store holding any run whose start names no performance, with
+`run.recorded-before-performances`, listing every such run and the event files that hold their events, saying which
+of those files hold other events too. Its fix SHALL say to read them with a troupe before 0.5, or to remove and
+commit the files that hold nothing else. It SHALL NOT be read without a performance or skipped.
+
+#### Scenario: A run from before performances
+- **WHEN** a theatre's committed events hold a run whose start's lineage has no `performance`, alone in its file,
+  and a person runs `troupe status`
+- **THEN** it is refused with `run.recorded-before-performances`, naming the run and its file as one that holds
+  nothing else
+
+#### Scenario: A file shared with a config change
+- **WHEN** such a run's start is in the same file as a config change, and a person runs `troupe status`
+- **THEN** the refusal names that file as one that holds other events, to keep
+

@@ -13,6 +13,8 @@
   protocol strictness check passes.
 - [ ] 1.4 Update `docs/the-company/lineage.md` and `docs/stagecraft/read-the-lineage.md` for `performance`. Verify:
   the docs check passes.
+- [ ] 1.5 Add "Records an older troupe wrote" to `contributing/releasing.md` (the owner's pre-1.0 rule,
+  2026-11-28). Verify: the docs check passes.
 
 ## 2. The performance aggregate
 
@@ -48,8 +50,11 @@
 
 ## 5. Reading performances back
 
-- [ ] 5.1 `RunView` reads `performance` and `step`. A run start without `performance` raises `events.lineage-invalid`
-  naming the run (D8). Verify: projection tests for both.
+- [ ] 5.1 `RunView` reads `performance` and `step`. Reading runs back refuses every run whose start has no
+  `performance` with `run.recorded-before-performances` (D8), which lists the runs, their segment files, which files
+  hold anything else, and the fix. Catalogue the code. Verify: projection tests for a run with a performance, and for
+  a store holding a pre-performances run's segment alone and one sharing a segment with a config change. Each
+  checks the error's details and fix.
 - [ ] 5.2 Extend `resolve` to performance ids and prefixes (D6). Add `performance.several-runs` and catalogue it.
   Verify:
   - `diff`, `approve` and `logs` work through a performance id;

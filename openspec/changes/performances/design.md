@@ -168,12 +168,30 @@ Alternative: **give `StatusResult` a list of performance summaries holding runs,
 until a performance has more than one run, the extra level would hold exactly the run summary, and its shape is
 easier to settle beside a flow's progress line.
 
-### D8. Runs recorded before this change aren't read leniently
+### D8. Runs recorded before this change are refused, clearly
 
-A `Run.Started` whose lineage has no `performance` fails its schema, and the fold raises `events.lineage-invalid`
-naming the run and the field, rather than inventing a performance or skipping the run. There are no such stores to
-migrate before 1.0 (owner, 2026-11-07, #296; decision 2 on #124). Test fixtures that hold recorded events are
-regenerated or rewritten with the field.
+troupe doesn't migrate them. Before 1.0 it may refuse records an older troupe wrote, as long as it says so clearly and
+how to fix it (owner, 2026-11-28, troupe#124; written down in `contributing/releasing.md`).
+
+- **Detection:** reading runs back (`read_runs`, which every query uses) looks for any run whose start's lineage has
+  no `performance`. It never invents a performance, skips the run, or crashes on the missing key.
+- **The refusal:** a new code, `run.recorded-before-performances`, catalogued and raised by a test. It lists every
+  such run at once, so one fix covers them all. It names each run, and says these runs predate performances (troupe
+  0.5.0) and this troupe doesn't read them.
+- **The fix it gives,** from the store's own records (each recorded event names its segment file):
+  - the `.troupe/events/` segment files that hold those runs' events;
+  - for each file, whether it holds anything else, such as the config changes a perform's sync recorded;
+  - to read the runs, use a troupe before 0.5 (`troupe-run<0.5`);
+  - to go on without them, remove the files that hold nothing else and commit the removal. A file that holds other
+    events too is named as one to keep.
+- **Recording:** a recorded run event without `performance` is refused when it's written (D4), so new ones can't
+  appear.
+
+Alternatives:
+
+- **Read such runs with no performance.** Rejected: that's the lenient "recorded before" form the rule rules out.
+- **A `troupe` command that removes them.** Rejected: more to build for records that exist only on developers'
+  machines. The error's file list is enough.
 
 ## Risks / Trade-offs
 
@@ -188,6 +206,6 @@ regenerated or rewritten with the field.
 
 ## Migration Plan
 
-None for data (D8). The protocol release is breaking (0.4.0 → 0.5.0), carried by a `feat(protocol)!:` commit with a
+None for data: older runs are refused with a fix (D8). The protocol release is breaking (0.4.0 → 0.5.0), carried by a `feat(protocol)!:` commit with a
 `BREAKING CHANGE:` footer. After this pull request merges, troupe-run/infrastructure gets the pull request that
 records the `performances` spec's Purpose in `oob/troupe-spec-purposes.json`.
