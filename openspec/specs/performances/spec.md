@@ -1,3 +1,5 @@
+# performances Specification
+
 ## Purpose
 
 Capability: `cap:runs`, `cap:lineage`
@@ -6,7 +8,7 @@ Records every perform as a performance: one run of your process, with its own id
 steps are runs, so that whatever a perform caused can be found from the performance, and a performance id names its
 run.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Every perform records a performance
 Every `perform` that starts a run SHALL record a performance around it. The performance SHALL be its own stream,
@@ -148,3 +150,31 @@ commit the files that hold nothing else. It SHALL NOT be read without a performa
 - **WHEN** such a run's start is in the same file as a config change, and a person runs `troupe status`
 - **THEN** the refusal names that file as one that holds other events, to keep
 
+### Requirement: A run is listed and summarised with its performance
+A performance of one step SHALL be listed by `status` as its run, naming the performance. Every run summary that
+`status`, `logs` and `perform` return SHALL name the run's performance and its step.
+
+#### Scenario: Status names the performance and step
+- **WHEN** a person runs `status <run>` for a run started by `troupe perform tester`
+- **THEN** its summary names the performance `perform` printed, and step 1
+
+#### Scenario: Perform's result names the performance
+- **WHEN** a person performs `tester` and its run ends
+- **THEN** the run summary in perform's result names the performance and step 1
+
+### Requirement: The CLI shows a performance before its run
+`troupe perform`'s standard output on success SHALL name the performance, then the run, then `succeeded`. Each line of
+`troupe status`'s list SHALL start with the performance's id, and `troupe status <run>` SHALL show the run's
+performance and its step.
+
+#### Scenario: A successful run
+- **WHEN** a person performs `tester` and its run ends `succeeded`
+- **THEN** standard output is one line naming the performance, the run and `succeeded`
+
+#### Scenario: The list starts each line with the performance
+- **WHEN** a person has performed `tester` and runs `troupe status`
+- **THEN** the line for that perform starts with the performance's id, then names the run and its state as before
+
+#### Scenario: A run's summary names its performance
+- **WHEN** a person runs `troupe status <run>`
+- **THEN** the summary shows the run's performance and its step

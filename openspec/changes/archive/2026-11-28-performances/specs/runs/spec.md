@@ -56,17 +56,3 @@ performance, and a performance's id as the performances spec says. A prefix that
 #### Scenario: A performance's id
 - **WHEN** a person asks for `logs <performance>` for an actor's performance
 - **THEN** it returns the log of the performance's run
-
-## ADDED Requirements
-
-### Requirement: A run is listed and summarised with its performance
-A performance of one step SHALL be listed by `status` as its run, naming the performance. Every run summary that
-`status`, `logs` and `perform` return SHALL name the run's performance and its step.
-
-#### Scenario: Status names the performance and step
-- **WHEN** a person runs `status <run>` for a run started by `troupe perform tester`
-- **THEN** its summary names the performance `perform` printed, and step 1
-
-#### Scenario: Perform's result names the performance
-- **WHEN** a person performs `tester` and its run ends
-- **THEN** the run summary in perform's result names the performance and step 1
