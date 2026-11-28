@@ -98,7 +98,8 @@ SCRIPT = {
     }
 }
 """The scripted runner's options from "Your first performance": write one file."""
-_SUCCEEDED = re.compile(r"^run \S+ succeeded$", re.MULTILINE)
+_SUCCEEDED = re.compile(r"^performance \S+: run \S+ succeeded$", re.MULTILINE)
+"""perform's standard output on success: the performance, then its run (spec: cli)."""
 _COMMIT = re.compile(r"[0-9a-f]{40}([0-9a-f]{24})?")
 _TAGGED = re.compile(re.escape(TAG_PREFIX) + r"(\d+\.\d+\.\d+\S*)")
 
@@ -489,7 +490,8 @@ def _perform(theatre: Path, troupe: str, env: dict[str, str]) -> str:
     succeeded = _SUCCEEDED.search(shown)
     if succeeded is None:
         raise InstallCheckError(
-            f"perform: `{' '.join(perform)}` printed {shown!r}, not run <id> succeeded."
+            f"perform: `{' '.join(perform)}` printed {shown!r}, not "
+            "performance <id>: run <id> succeeded."
         )
     return succeeded.group(0)
 

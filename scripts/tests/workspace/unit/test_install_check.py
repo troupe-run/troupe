@@ -341,3 +341,11 @@ def test_the_would_change_code_is_troupes() -> None:
     from troupe.core.exit_codes import ExitCode
 
     assert install_check.WOULD_CHANGE == ExitCode.WOULD_CHANGE
+
+
+def test_a_succeeded_perform_is_recognised_by_its_performance_then_its_run() -> None:
+    performed = "performance 4cbd8c54-a6df-40ee-afb6-70f09935e866: run 1b1bb4c4 succeeded\n"
+    found = install_check._SUCCEEDED.search(performed)
+    assert found is not None
+    assert found.group(0) == performed.strip()
+    assert install_check._SUCCEEDED.search("run 1b1bb4c4 succeeded\n") is None
