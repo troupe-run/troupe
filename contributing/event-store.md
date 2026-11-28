@@ -199,7 +199,7 @@ say is left out, never written as `null`.
 | `reason` | Why, in the actor's words. Left out when none was given |
 | `change` | The correlation id: minted by a command, and carried by every event that follows from it |
 | `cause` | `{kind: command, id: <change>}` for a command's own events, or `{kind: event, id: <id>}` for a reaction |
-| `approvals` | Who approved it, in which role: one approval on the acceptance that keeps a run's work at a gate (troupe's, in role `troupe`, or a person's, in role `director`), and empty on every other event |
+| `approvals` | Who approved it, in which role: one approval on the event that lets a run's work through its gate, the acceptance that keeps it or, between a flow's steps, `Run.ChangesApproved` (troupe's, in role `troupe`, or a person's, in role `director`), and empty on every other event |
 | `vcs` | The adapter; the branch, left out when HEAD is detached or the adapter has no branches; HEAD, left out before the first commit; and for an event made from a file, its theatre-relative path and its before and after content hashes, each left out when the file didn't exist or no longer does |
 | `stage` | For an event a run recorded, the stage the actor ran on and whether its effects were `enforced` or `unenforced`; for an unenforced run, the policy setting and source that allowed it (`allowedBy`). Left out for every other event |
 | `performance` | The performance the event belongs to: required on every event of a performance's stream and of a run's stream, whoever records it, and refused on every other event, such as a config change. Checked by topic when an event is recorded (`events.lineage-invalid`), and by each event's schema |

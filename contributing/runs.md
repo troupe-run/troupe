@@ -21,8 +21,8 @@ event store ([contributing/event-store.md](event-store.md)). The runner contract
    `[]` is none) and its character, which `run/start` carries apart from the direction. Config is synced
    first, as every command that uses config does: hand edits recorded, then the files written.
 3. **The performance's id and the run id** are new UUIDs. `perform` shows the performance's first, then the run's,
-   so you can follow the run from another terminal. Every perform is a performance of one step until flows
-   ([Performances](#performances)).
+   so you can follow the run from another terminal. An actor's perform is a performance of one step; a flow's has one
+   step per flow step, each a run ([Performances](#performances)).
 4. **The run's lease** is taken: a lock on `.troupe/local/runs/<run id>/`, held while `perform` runs. Once it
    holds the lock, `perform` writes its process id there as `perform.pid`, with the platform seam's namespace
    token on the next line, so a lock that's still held after the process has ended can be told apart (see the
@@ -38,7 +38,7 @@ A run is its own stream, keyed by its run id. Its events, in order:
 
 | Event | When | Actor and via |
 |---|---|---|
-| `Run.Started` | Before the run's workspace is made and its runner starts, once every check that can refuse it has passed, and after its direction is stored, in the same batch as its performance's start. It holds its step in its performance (from 1), the actor's name, the runner asked for, the stage's admission, the effect check, the direction's reference, the config version (the config stream's heads, sorted), the workspace: the worktree's path, base commit and whether the theatre was dirty, or `theatre`, the run's `onContextFull` with where it came from (`actor`, `policy` or `default`), and, for a worktree run, its approvers with where they came from (`actor` or `default`) | You, through `cli` |
+| `Run.Started` | Before the run's workspace is made and its runner starts, once every check that can refuse it has passed, and after its direction is stored, in the same batch as its performance's start. It holds its step in its performance (from 1), the actor's name, the runner asked for, the stage's admission, the effect check, the direction's reference, the config version (the config stream's heads, sorted), the workspace: the worktree's path, base commit and whether the theatre was dirty, or `theatre`, the run's `onContextFull` with where it came from (`actor`, `policy` or `default`), and, for a worktree run, its approvers with where they came from (`step`, `actor` or `default`) | You, through `cli` |
 | `Run.WorktreeMade` | For a worktree run, once its worktree is made and filled, before the runner starts. It holds the clone mechanisms | You, through `cli` |
 | `Run.Reported` | Once per run event, in `seq` order. It holds the event's `seq` and the event as received. The first is `init`, and a run's reported runner is read from it | The agent (`source: troupe`), through `runner` |
 | `Run.Noticed` | Once per notice troupe raises for the run, in the order it was raised among the run's events, before the end. It holds the notice, its credential masked. One raised before the start (planning the worktree) is recorded straight after it. It has no `seq` | You, through `cli` |
@@ -57,11 +57,11 @@ runner's numbering, kept in the payload; it isn't the stream's version, which co
 ### Performances
 
 Every perform records a performance (`troupe.core.runs.performance`), its own stream keyed by its id. Each step is a
-run; until flows, a performance has one.
+run: an actor's performance has one, and a [flow](../docs/the-company/flows.md)'s has one per step, run in order.
 
 | Event | When | Actor and via |
 |---|---|---|
-| `Performance.Started` | In the same batch as its first run's start, so neither is recorded without the other. It holds what was performed (`{kind: actor, name}`), its steps (each step's actor, and its approvers with where they came from for a worktree run), the direction's reference and the config version | You, through `cli` |
+| `Performance.Started` | In the same batch as its first run's start, so neither is recorded without the other. It holds what was performed (`{kind: actor or flow, name}`), its steps (each step's actor, and its approvers with where they came from for a worktree run), the direction's reference and the config version | You, through `cli` |
 | `Performance.Ended` | Once nothing more will happen in it, in the same batch as what settled it: the run's end (`completed`, `failed` or `cancelled`; `failed` too for a run that succeeded but whose changes couldn't be captured) when no gate follows, troupe's acceptance at the gate (`completed`), or a person's approve (`completed`) or reject (`rejected`). A person's accept (`completed`) or discard (`rejected`) ends a performance its perform left open. A performance whose work waits at a gate has none. A second end is refused (`performance.out-of-sequence`) | Whoever recorded the event it's batched with (you for the run's end), with no approval |
 
 Every event in a performance's or a run's stream names the performance in its lineage, and no other event does: the
