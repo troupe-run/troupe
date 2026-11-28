@@ -48,6 +48,7 @@ A run is its own stream, keyed by its run id. Its events, in order:
 | `Run.ChangesAccepted` | When a worktree run's changes are kept, after the diff applied: by a person's accept (no approvals), by troupe at the gate, or by a person's approve. It holds the diff's reference and the files it changed. At a gate, its lineage carries one approval, in role `troupe` or `director` | You, or troupe at the gate, through `cli`, with no `stage` |
 | `Run.ChangesDiscarded` | When a person discards a worktree run's changes, after its worktree was removed. Refused while a cue is open | You, through `cli`, with no `stage` |
 | `Run.ChangesRejected` | When a person rejects a run's open cue, after its worktree was removed. It holds the role the cue was for | You, through `cli`, with no `stage` |
+| `Run.ChangesApproved` | When a flow's step before its last is let through its gate, so its work goes on to the next step: by troupe, in the end's batch, or by a person's approve. It holds the role, and its lineage carries the approval | troupe, or you, through `cli`, with no `stage` |
 
 All of a run's events share one change id, and every one names the run's performance in its lineage. `seq` is the
 runner's numbering, kept in the payload; it isn't the stream's version, which counts `Run.Started` too. Recording a

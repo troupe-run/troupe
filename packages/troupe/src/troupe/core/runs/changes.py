@@ -37,7 +37,13 @@ from troupe.core.runs.projections import RunView
 from troupe.core.runs.queries import read_runs, resolve, run_state
 from troupe.core.workspaces import remove_worktree, worktree_path
 
-SETTLED = ("accepted", "discarded", "rejected")
+SETTLED = ("approved", "accepted", "discarded", "rejected")
+
+
+def landing(changes: dict[str, Any]) -> str:
+    """The diff keeping a run's work applies: the performance's diff so far for a flow's later
+    step, else the run's own (actor-sequences design D4, D5)."""
+    return str(changes.get("sofar") or changes["diff"])
 
 
 def performance_of(view: RunView) -> str:
@@ -216,7 +222,7 @@ def conflict(view: RunView, changes: dict[str, Any], failing: list[str]) -> Trou
         path=changes["worktree"],
         details={
             "run": view.run_id,
-            "diff": changes["diff"],
+            "diff": landing(changes),
             "files": list(failing),
             "worktree": changes["worktree"],
         },
@@ -261,7 +267,7 @@ def keep(
         store,
         view.run_id,
         reason,
-        lambda run: run.accept_changes(changes["diff"], list(files), approved_as=approved_as),
+        lambda run: run.accept_changes(landing(changes), list(files), approved_as=approved_as),
         performance=performance_of(view),
         command=command,
         approved_as=approved_as,
@@ -289,7 +295,7 @@ def _accept(
     store.identify()  # who is accepting: refused before anything changes when no one answers
     view = view_of(store, request.run)
     changes = _acceptable(view, theatre)
-    data = backends.artifact_store(session).read(changes["diff"])
+    data = backends.artifact_store(session).read(landing(changes))
     with directory_lock(settle_lock(theatre, view.run_id)):
         view = view_of(store, view.run_id)  # again, inside the lock: another accept may have won
         changes = _acceptable(view, theatre)

@@ -30,20 +30,20 @@ Each group lands as its own push on one pull request, in this order, and is revi
 
 - [x] 3.1 Split `perform` into a plan and a driver (D2) with every existing perform test unchanged and passing. Verify:
   the full perform and run test suites pass with no test edited for behaviour.
-- [ ] 3.2 Resolve `troupe perform <flow>` to a plan of its steps, with every refusal checked over every step before
+- [x] 3.2 Resolve `troupe perform <flow>` to a plan of its steps, with every refusal checked over every step before
   anything is recorded, and a rehearsal covering all of them. Verify: integration tests for a two-step flow's records,
   and a rehearsal refused by its second step recording nothing.
-- [ ] 3.3 Build each step's worktree on the work so far (D3), with its audit judging only its own changes. Verify: an
+- [x] 3.3 Build each step's worktree on the work so far (D3), with its audit judging only its own changes. Verify: an
   integration test where step 2 reads step 1's file, step 2's diff omits step 1's change, and the theatre's files are
   untouched mid-flow.
-- [ ] 3.4 Assemble each step's direction (D6) and write the history files into its worktree. Verify: tests of step 3's
+- [x] 3.4 Assemble each step's direction (D6) and write the history files into its worktree. Verify: tests of step 3's
   stored direction, of each history file's content, of history never in a diff, and of a runtime credential absent
   from every history file.
-- [ ] 3.5 Gates between steps (D5): resolved approvers with `step` as a source, `Run.ChangesApproved` with its schema and
+- [x] 3.5 Gates between steps (D5): resolved approvers with `step` as a source, `Run.ChangesApproved` with its schema and
   lineage rule, the step's worktree removed once the next is made, and the last step's gate applying `sofar`. Verify:
   integration tests for troupe letting a step through, a person-first step waiting (exit 4, no end), a landing flow,
   and a last step with no changes still landing the flow's work.
-- [ ] 3.6 Perform's updates and the CLI progress lines for a flow (`step <k>/<n> <actor>`). Verify: client schema tests
+- [x] 3.6 Perform's updates and the CLI progress lines for a flow (`step <k>/<n> <actor>`). Verify: client schema tests
   and a CLI test of a two-step flow's standard error.
 
 ## 4. Carrying on, stopping, settling

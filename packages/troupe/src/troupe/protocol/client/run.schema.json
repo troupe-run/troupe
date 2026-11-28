@@ -30,6 +30,10 @@
         "prefix": {"description": "Where the theatre is in its repository, such as apps/web/, when it isn't the top level. Absent: the theatre is the repository's top level.", "$ref": "../events/run-started.schema.json#/$defs/worktreeWorkspace/properties/prefix"},
         "base": {"$ref": "../events/run-started.schema.json#/$defs/worktreeWorkspace/properties/base"},
         "dirty": {"$ref": "../events/run-started.schema.json#/$defs/worktreeWorkspace/properties/dirty"},
+        "builtOn": {
+          "description": "The run of the flow's step before, whose work so far the worktree was built on. Absent: the run is its performance's first step, or a single actor's run.",
+          "$ref": "../events/run-started.schema.json#/$defs/worktreeWorkspace/properties/builtOn"
+        },
         "clones": {
           "description": "The clone mechanisms used for the files that matched HEAD, sorted. Absent: the worktree isn't made yet.",
           "$ref": "../events/run-worktree-made.schema.json#/$defs/clones"
@@ -209,13 +213,13 @@
     },
     "approvers": {
       "title": "Approvers",
-      "description": "A worktree run's approvers, in the order its gate tries them, and where they came from: actor when the actor's approvers set them, default when they're troupe's built-in troupe, director.",
+      "description": "A worktree run's approvers, in the order its gate tries them, and where they came from: step when a flow's step sets them, actor when the actor's approvers set them, default when they're troupe's built-in troupe, director.",
       "type": "object",
       "additionalProperties": false,
       "required": ["value", "source"],
       "properties": {
         "value": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/role"}},
-        "source": {"enum": ["actor", "default"]}
+        "source": {"enum": ["step", "actor", "default"]}
       }
     },
     "gateStep": {
@@ -288,7 +292,7 @@
           ],
           "properties": {
             "step": {
-              "description": "approved: the role kept the changes. rejected: the role removed them.",
+              "description": "approved: the role let the changes through, keeping them or, between a flow's steps, letting them go on. rejected: the role removed them.",
               "enum": [
                 "approved",
                 "rejected"
@@ -315,12 +319,12 @@
     },
     "changes": {
       "title": "A run's changes",
-      "description": "A worktree run's changes. state: waiting (a cue for them is open at the run's gate), pending (captured, with no gate and not yet accepted or discarded), accepted, discarded, rejected (at the gate), none (the run changed nothing) or uncaptured (the run was interrupted, or capturing failed). The worktree is kept until the changes are accepted, discarded or rejected.",
+      "description": "A worktree run's changes. state: waiting (a cue for them is open at the run's gate), pending (captured, with no gate and not yet accepted or discarded), approved (a flow's step let through its gate, its work gone on to the next step), accepted, discarded, rejected (at the gate), none (the run changed nothing) or uncaptured (the run was interrupted, or capturing failed). The worktree is kept until the changes are accepted, discarded or rejected.",
       "type": "object",
       "additionalProperties": false,
       "required": ["state"],
       "properties": {
-        "state": {"enum": ["waiting", "pending", "accepted", "discarded", "rejected", "none", "uncaptured"]},
+        "state": {"enum": ["waiting", "pending", "approved", "accepted", "discarded", "rejected", "none", "uncaptured"]},
         "cue": {
           "description": "The open cue the changes wait for. Present exactly when state is waiting.",
           "type": "object",
@@ -333,6 +337,10 @@
         },
         "diff": {
           "description": "The diff's artifact reference. Present exactly when the run's end recorded one.",
+          "$ref": "#/$defs/hash"
+        },
+        "sofar": {
+          "description": "The performance's diff so far, through this step, as its run's end recorded it: what a flow's last gate lands. Absent: the run is its performance's only or first step, or nothing has changed so far.",
           "$ref": "#/$defs/hash"
         },
         "added": {
@@ -379,18 +387,21 @@
         }
       },
       "allOf": [
-        {"if": {"properties": {"state": {"const": "pending"}}}, "then": {"required": ["diff", "worktree"]}},
+        {
+          "if": {"properties": {"state": {"const": "pending"}}},
+          "then": {"required": ["worktree"], "anyOf": [{"required": ["diff"]}, {"required": ["sofar"]}]}
+        },
         {
           "if": {"properties": {"state": {"const": "waiting"}}},
-          "then": {"required": ["diff", "worktree", "cue"]},
+          "then": {"required": ["worktree", "cue"], "anyOf": [{"required": ["diff"]}, {"required": ["sofar"]}]},
           "else": {"properties": {"cue": false}}
         },
         {
           "if": {"properties": {"state": {"enum": ["none", "uncaptured"]}}},
-          "then": {"required": ["worktree"], "properties": {"diff": false}}
+          "then": {"required": ["worktree"], "properties": {"diff": false, "sofar": false}}
         },
         {
-          "if": {"properties": {"state": {"enum": ["accepted", "discarded", "rejected"]}}},
+          "if": {"properties": {"state": {"enum": ["approved", "accepted", "discarded", "rejected"]}}},
           "then": {"required": ["settledAt"], "properties": {"worktree": false}},
           "else": {"properties": {"settledAt": false}}
         }

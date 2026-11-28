@@ -70,6 +70,7 @@ A segment's first line is its header; every later line is one event. Lines are s
   | `troupe.core.runs.aggregate:Run.GatePassed` | [`events/run-gate-passed.schema.json`](../protocol/schemas/events/run-gate-passed.schema.json) |
   | `troupe.core.runs.aggregate:Run.CueRaised` | [`events/run-cue-raised.schema.json`](../protocol/schemas/events/run-cue-raised.schema.json) |
   | `troupe.core.runs.aggregate:Run.ChangesRejected` | [`events/run-changes-rejected.schema.json`](../protocol/schemas/events/run-changes-rejected.schema.json) |
+  | `troupe.core.runs.aggregate:Run.ChangesApproved` | [`events/run-changes-approved.schema.json`](../protocol/schemas/events/run-changes-approved.schema.json) |
   | `troupe.core.runs.performance:Performance.Started` | [`events/performance-started.schema.json`](../protocol/schemas/events/performance-started.schema.json) |
   | `troupe.core.runs.performance:Performance.Ended` | [`events/performance-ended.schema.json`](../protocol/schemas/events/performance-ended.schema.json) |
   | `troupe.core.config.aggregate:Config.Changed` | [`events/config-changed.schema.json`](../protocol/schemas/events/config-changed.schema.json) |

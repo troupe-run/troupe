@@ -121,6 +121,36 @@ def test_a_rejected_run_can_be_settled_no_more() -> None:
     assert caught.value.details["settled"] == "rejected"
 
 
+def test_troupe_lets_a_flows_step_go_on_with_no_cue() -> None:
+    run = ended()
+    run.approve_changes("troupe")
+    assert names(run) == ["Run.ChangesApproved"]
+    assert run.settled == "approved"
+
+
+def test_a_cue_then_an_approval_between_steps_in_the_cues_role_lets_it_go_on() -> None:
+    run = cued(ended())
+    run.approve_changes("director")
+    assert names(run) == ["Run.CueRaised", "Run.ChangesApproved"]
+
+
+def test_letting_a_step_go_on_in_a_role_the_cue_isnt_for_is_refused() -> None:
+    run = cued(ended())
+    with pytest.raises(TroupeError) as caught:
+        run.approve_changes("troupe")
+    assert caught.value.code == "run.waiting-at-gate"
+    assert names(run) == ["Run.CueRaised"]
+
+
+def test_a_step_let_go_on_can_be_settled_no_more() -> None:
+    run = ended()
+    run.approve_changes("troupe")
+    with pytest.raises(TroupeError) as caught:
+        run.accept_changes(DIFF, ["src/a.txt"])
+    assert caught.value.code == "run.changes-settled"
+    assert caught.value.details["settled"] == "approved"
+
+
 def before_end() -> Run:
     run = ended()
     fresh = Run(

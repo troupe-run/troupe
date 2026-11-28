@@ -22,6 +22,7 @@ perform fails with run.recording-failed.
 """
 
 import asyncio
+import contextlib
 import functools
 import hashlib
 import os
@@ -59,18 +60,26 @@ from troupe.core.runs import gate
 from troupe.core.runs.backends import PERFORM_PID_FILE
 from troupe.core.runs.backends import Backends as Backends
 from troupe.core.runs.backends import lease_dir as lease_dir
+from troupe.core.runs.briefs import (
+    Earlier,
+    changed_files,
+    direction_for,
+    final_message,
+    history_files,
+)
+from troupe.core.runs.changes import landing
 from troupe.core.runs.performance import Performance
 from troupe.core.runs.plan import ContextFull as ContextFull
 from troupe.core.runs.plan import (
     PerformanceStart,
-    Performed,
+    plan_steps,
 )
 from troupe.core.runs.plan import _from_config as _from_config
 from troupe.core.runs.plan import _rehearsed_approvers as _rehearsed_approvers
 from troupe.core.runs.plan import _StepPlan as _StepPlan
 from troupe.core.runs.plan import _What as _What
 from troupe.core.runs.plan import resolve_context_full as resolve_context_full
-from troupe.core.runs.projections import fold_runs
+from troupe.core.runs.projections import RunView, fold_runs
 from troupe.core.runs.queries import refuse_runs_before_performances
 from troupe.core.runs.recording import _as_troupe_error as _as_troupe_error
 from troupe.core.runs.recording import _Failure
@@ -81,9 +90,11 @@ from troupe.core.vcs import SharedState, Vcs
 from troupe.core.workspaces import (
     Planned,
     Worktree,
+    build_on,
     capture,
     make_worktree,
     plan_worktree,
+    remove_worktree,
     shared_changed,
     snapshot,
     worktree_base,
@@ -213,7 +224,8 @@ async def perform(
     synced = await asyncio.to_thread(
         functools.partial(sync_files, session, store, quiet, rehearse=True)
     )
-    steps = [_ready(prepared, step, synced.merged) for step in _plan(synced.merged, request.actor)]
+    _, planned = plan_steps(synced.merged, request.actor)
+    steps = [_ready(prepared, step, synced.merged) for step in planned]
     direction = request.direction or ""
     base: tuple[str, str] | None = None
     if any(ready.step.what.workspace == "worktree" for ready in steps):
@@ -226,20 +238,86 @@ async def perform(
     # Now for real, just before the run: hand edits recorded, files written. The run uses the
     # config this leaves, and records its version.
     synced = await asyncio.to_thread(functools.partial(sync_files, session, store, send))
-    steps = [_ready(prepared, step, synced.merged) for step in _plan(synced.merged, request.actor)]
+    performed, planned = plan_steps(synced.merged, request.actor)
+    steps = [_ready(prepared, step, synced.merged) for step in planned]
     performance_id = str(uuid4())
-    start = PerformanceStart(
-        performance_id,
-        Performed("actor", request.actor),
-        [ready.step.recorded() for ready in steps],
-    )
-    summary = await _run_step(prepared, steps[0], performance_id, direction, base, start=start)
+    start = PerformanceStart(performance_id, performed, [ready.step.recorded() for ready in steps])
+    summary = await _drive(prepared, steps, performance_id, direction, base, start=start)
     return m.PerformResult(run=summary)
 
 
-def _plan(merged: Merged, name: str) -> list[_StepPlan]:
-    """The steps performing ``name`` runs: one, for an actor."""
-    return [_StepPlan(_from_config(merged, name))]
+@dataclass(frozen=True)
+class _BuiltOn:
+    """What a flow's later step is built on: the run of the step before, and the performance's
+    diff so far, None when nothing has changed yet (actor-sequences design D3)."""
+
+    run_id: str
+    patch: str | None
+
+
+async def _drive(
+    prepared: _Prepared,
+    steps: list[_Ready],
+    performance_id: str,
+    direction: str,
+    base: tuple[str, str] | None,
+    *,
+    start: PerformanceStart | None = None,
+    earlier: list[Earlier] | None = None,
+    built_on: _BuiltOn | None = None,
+) -> m.RunSummary:
+    """Run ``steps`` in order, each built on the one before, until the last step's gate, a gate
+    that waits, or a step that doesn't succeed; the last run's summary. ``earlier`` are the steps
+    that ran before ``steps[0]``, when approve carries a waiting flow on (actor-sequences design
+    D2, D7)."""
+    store, artifacts = prepared.store, prepared.backends.artifact_store(prepared.session)
+    done: list[Earlier] = list(earlier or [])
+    summary: m.RunSummary | None = None
+    for ready in steps:
+        performance = None
+        if not ready.step.position.first:
+            loaded = await asyncio.to_thread(store.load, UUID(performance_id))
+            performance = loaded if isinstance(loaded, Performance) else None
+        told = direction_for(direction, ready.step.own_direction, done)
+        view = await _run_step(
+            prepared,
+            ready,
+            performance_id,
+            told,
+            base,
+            start=start if ready.step.position.first else None,
+            performance=performance,
+            built_on=built_on,
+            history=history_files(done),
+        )
+        summary = view.summary("ended")
+        changes = summary.changes.to_data() if summary.changes is not None else {}
+        goes_on = summary.outcome == "succeeded" and changes.get("state") in ("approved", "none")
+        if ready.step.position.last or not goes_on:
+            return summary
+        done.append(await asyncio.to_thread(_earlier, store, artifacts, ready, view))
+        work = changes.get("sofar") or changes.get("diff") or (built_on.patch if built_on else None)
+        built_on = _BuiltOn(view.run_id, work)
+    if summary is None:
+        raise RuntimeError("a performance has at least one step")
+    return summary
+
+
+def _earlier(store: EventStore, artifacts: ArtifactStore, ready: _Ready, view: RunView) -> Earlier:
+    """The step that just ran, as later steps are told about it and read its history."""
+    [logged] = fold_runs(store.history(UUID(view.run_id)), keep_log=True).values()
+    changes = view.changes() or {}
+    diff = artifacts.read(changes["diff"]) if "diff" in changes else None
+    outcome = ((view.ended or {}).get("outcome") or {}).get("outcome", "ended")
+    return Earlier(
+        ready.step.position.index,
+        ready.step.what.actor,
+        str(outcome),
+        changed_files(diff),
+        final_message(view.ended),
+        diff,
+        tuple(logged.log),
+    )
 
 
 def _ready(prepared: _Prepared, step: _StepPlan, merged: Merged) -> _Ready:
@@ -297,7 +375,9 @@ async def _run_step(
     *,
     start: PerformanceStart | None = None,
     performance: Performance | None = None,
-) -> m.RunSummary:
+    built_on: _BuiltOn | None = None,
+    history: dict[str, bytes] | None = None,
+) -> RunView:
     """Run one step of a performance as a run, from its lease to its gate, and return the run as
     recorded. The first step's start records the performance's (``start``); a later one is given
     the ``performance`` it's a step of."""
@@ -356,14 +436,17 @@ async def _run_step(
                     plan_worktree, vcs, theatre, run_id, base[0], base[1], announce
                 )
             recorded_workspace = (
-                planned.record(theatre) if planned is not None else {"kind": "theatre"}
+                planned.record(theatre, built_on=built_on.run_id if built_on else None)
+                if planned is not None
+                else {"kind": "theatre"}
             )
             await recorder.start(recorded_workspace)
             if start is not None:
                 send(
                     m.PerformanceStarted(
                         performance_id=performance_id,
-                        performed=m.Performed(kind="actor", name=start.performed.name),
+                        performed=m.Performed(kind=start.performed.kind, name=start.performed.name),
+                        steps=step.position.total,
                     )
                 )
             send(
@@ -371,6 +454,7 @@ async def _run_step(
                     run_id=run_id,
                     performance_id=performance_id,
                     step=step.position.index,
+                    actor=what.actor,
                     worktree=recorded_workspace["path"] if planned is not None else None,
                 )
             )
@@ -379,6 +463,9 @@ async def _run_step(
             try:
                 if planned is not None:
                     worktree = await asyncio.to_thread(make_worktree, vcs, planned, announce)
+                    worktree = await asyncio.to_thread(
+                        _build, prepared, worktree, built_on, history or {}, announce
+                    )
                     await recorder.made(worktree)
                     shared_before = await asyncio.to_thread(snapshot, vcs, announce)
             except Exception as error:
@@ -409,7 +496,10 @@ async def _run_step(
                 store=artifacts,
                 effect=expected_files_for(what, workspace),
                 audit=audit_for(
-                    what, workspace, vcs, worktree.baseline if worktree is not None else None
+                    what,
+                    workspace,
+                    vcs,
+                    (worktree.own_baseline or worktree.baseline) if worktree is not None else None,
                 ),
                 limits=backends.limits,
                 on_event=recorder.on_event,
@@ -443,11 +533,41 @@ async def _run_step(
                 person,
                 announce,
             )
-            history = await asyncio.to_thread(store.history, UUID(run_id))
+            recorded = await asyncio.to_thread(store.history, UUID(run_id))
         finally:
             recorder.stop()
-    [view] = fold_runs(history).values()
-    return view.summary("ended")
+    [view] = fold_runs(recorded).values()
+    return view
+
+
+def _build(
+    prepared: _Prepared,
+    worktree: Worktree,
+    built_on: _BuiltOn | None,
+    history: dict[str, bytes],
+    announce: Callable[[Notice], None],
+) -> Worktree:
+    """A flow's later step's worktree: the performance's diff so far applied inside it, the step
+    before's worktree removed (its work lives on here), and the earlier steps' history written
+    where the step can read it (actor-sequences design D3, D5, D6)."""
+    if built_on is None:
+        return worktree
+    vcs = prepared.store.vcs
+    if built_on.patch is not None:
+        patch = worktree.path.parent / f"{worktree.path.name}.sofar.diff"
+        artifacts = prepared.backends.artifact_store(prepared.session)
+        patch.write_bytes(artifacts.read(built_on.patch))
+        try:
+            worktree = build_on(vcs, worktree, patch, announce)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                patch.unlink()
+    for path, data in history.items():
+        target = worktree.cwd.joinpath(*path.split("/"))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    remove_worktree(vcs, prepared.session.theatre, built_on.run_id, announce)
+    return worktree
 
 
 async def _troupes_turn(
@@ -472,7 +592,7 @@ async def _troupes_turn(
         or gate.first_is_a_person(approvers.value)
     ):
         return
-    patch = await asyncio.to_thread(artifacts.read, changes["diff"])
+    patch = await asyncio.to_thread(artifacts.read, landing(changes))
     await asyncio.to_thread(
         gate.troupes_step, store, theatre, patch, run_id, approvers.value, person, announce
     )

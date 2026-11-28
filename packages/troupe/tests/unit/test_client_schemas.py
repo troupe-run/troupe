@@ -175,7 +175,7 @@ ACCEPTED = [
     ),
     (
         "perform-update.schema.json",
-        {"kind": "started", "runId": RUN_ID, "performanceId": RUN_ID, "step": 1},
+        {"kind": "started", "runId": RUN_ID, "performanceId": RUN_ID, "step": 1, "actor": "tester"},
         "started",
     ),
     (
@@ -184,6 +184,7 @@ ACCEPTED = [
             "kind": "performance-started",
             "performanceId": RUN_ID,
             "performed": {"kind": "actor", "name": "tester"},
+            "steps": 1,
         },
         "a performance started",
     ),

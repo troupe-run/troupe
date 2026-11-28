@@ -63,8 +63,8 @@ The payload of a performance's first event (topic troupe.core.runs.performance:P
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `originator_topic` | `"troupe.core.runs.performance:Performance"` | Yes | The event-sourcing library's name for the aggregate the stream holds. |
 | `performance_id` | string | Yes | The performance's id, which is also its stream's. |
-| `performed` | object | Yes | What was performed. Until flows, always an actor, by its name then. |
-| `steps` | list of object (Step) | Yes | The performance's steps, in the order they run. Until flows, exactly one. |
+| `performed` | object | Yes | What was performed: an actor or a flow, by its name then. |
+| `steps` | list of object (Step) | Yes | The performance's steps, in the order they run: one for an actor, a flow's steps for a flow. |
 | `direction` | string | Yes | The direction the performance was given, as a reference to the artifact holding it. |
 | `config` | list of string | Yes | The config version the performance started with: the ids of the config stream's heads, sorted. |
 
@@ -78,6 +78,16 @@ The payload of a run's acceptance (topic troupe.core.runs.aggregate:Run.ChangesA
 | `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
 | `diff` | string | Yes | The diff that was applied: the reference the run's end recorded. |
 | `files` | list of string | Yes | The files it changed, relative to the repository's top level. |
+
+### Run.ChangesApproved
+
+The payload of an approval at a flow's step before its last (topic troupe.core.runs.aggregate:Run.ChangesApproved): the step's work goes on to the next step, built on it, and nothing reaches the theatre yet. Its lineage carries the approval, troupe's in role troupe or a person's in the cue's role. Final: nothing else settles the run's changes after it.
+
+| Field | Holds | Always there | What it is |
+|---|---|---|---|
+| `lineage` | object (Lineage) | Yes | Where the event came from. It names the performance the run is a step of. |
+| `timestamp` | object (Library timestamp) | Yes | When the event-sourcing library created the event, as its transcoder writes a datetime. |
+| `role` | one of `"troupe"`, `"director"` | Yes | The role that let the work go on: troupe, or the role the open cue was for. |
 
 ### Run.ChangesDiscarded
 

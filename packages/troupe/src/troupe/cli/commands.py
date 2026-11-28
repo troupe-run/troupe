@@ -184,18 +184,30 @@ def run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -
     if arguments.rehearse:
         params["rehearse"] = True
 
+    steps = {"total": 1}
+
     def on_update(update: dict[str, Any]) -> None:
         if update["kind"] == "performance-started":
-            performed = update["performed"]
+            performed, steps["total"] = update["performed"], update["steps"]
+            shown = performed["name"]
+            if performed["kind"] == "flow":
+                shown += f", {update['steps']} step" + ("" if update["steps"] == 1 else "s")
             print(
-                f"troupe: performance {update['performanceId']} ({performed['name']}) starting",
+                f"troupe: performance {update['performanceId']} ({shown}) starting",
                 file=stderr,
                 flush=True,
             )
         elif update["kind"] == "started":
             run_id = update["runId"]
+            # A flow's step is named by its place and actor (spec: flows, "Perform names each step
+            # as it starts"); a single run's line is as it was.
+            step = (
+                f"step {update['step']}/{steps['total']} {update['actor']}: "
+                if steps["total"] > 1
+                else ""
+            )
             print(
-                f"troupe: run {run_id} starting; follow it from another terminal with "
+                f"troupe: {step}run {run_id} starting; follow it from another terminal with "
                 f"`troupe logs {run_id[:8]} --follow`",
                 file=stderr,
                 flush=True,

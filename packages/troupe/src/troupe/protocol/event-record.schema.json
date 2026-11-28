@@ -168,6 +168,7 @@
             "troupe.core.runs.aggregate:Run.GatePassed",
             "troupe.core.runs.aggregate:Run.CueRaised",
             "troupe.core.runs.aggregate:Run.ChangesRejected",
+            "troupe.core.runs.aggregate:Run.ChangesApproved",
             "troupe.core.runs.performance:Performance.Started",
             "troupe.core.runs.performance:Performance.Ended",
             "troupe.core.config.aggregate:Config.Changed",
@@ -340,6 +341,22 @@
           "if": {
             "properties": {
               "topic": {
+                "const": "troupe.core.runs.aggregate:Run.ChangesApproved"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "state": {
+                "$ref": "events/run-changes-approved.schema.json"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "topic": {
                 "const": "troupe.core.runs.performance:Performance.Started"
               }
             }
@@ -430,6 +447,7 @@
               "troupe.core.runs.aggregate:Run.GatePassed",
               "troupe.core.runs.aggregate:Run.CueRaised",
               "troupe.core.runs.aggregate:Run.ChangesRejected",
+              "troupe.core.runs.aggregate:Run.ChangesApproved",
               "troupe.core.runs.performance:Performance.Started",
               "troupe.core.runs.performance:Performance.Ended",
               "troupe.core.config.aggregate:Config.Changed",

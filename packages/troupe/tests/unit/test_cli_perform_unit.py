@@ -163,7 +163,13 @@ def _run(**fields: Any) -> PerformResult:  # noqa: ANN401
 
 
 def _started(*, worktree: bool = True) -> Started:
-    data = {"kind": "started", "runId": RUN_ID, "performanceId": PERFORMANCE, "step": 1}
+    data = {
+        "kind": "started",
+        "runId": RUN_ID,
+        "performanceId": PERFORMANCE,
+        "step": 1,
+        "actor": "lead",
+    }
     return Started.from_data({**data, "worktree": WORKTREE} if worktree else data)
 
 
@@ -444,9 +450,39 @@ def test_a_performance_is_named_before_its_run_on_standard_error(core: StandIn) 
             "kind": "performance-started",
             "performanceId": PERFORMANCE,
             "performed": {"kind": "actor", "name": "lead"},
+            "steps": 1,
         }
     )
     core.reply("perform", _in_theatre(), started, _started(worktree=False))
     ran = core.run("perform", "lead")
     assert ran.err == [f"troupe: performance {PERFORMANCE} (lead) starting", STARTING]
     assert ran.out == [f"performance {PERFORMANCE}: run {RUN_ID} succeeded"]
+
+
+def test_a_flows_performance_names_its_steps_and_each_step_its_place_and_actor(
+    core: StandIn,
+) -> None:
+    started = PerformanceStarted.from_data(
+        {
+            "kind": "performance-started",
+            "performanceId": PERFORMANCE,
+            "performed": {"kind": "flow", "name": "review"},
+            "steps": 3,
+        }
+    )
+    step = Started.from_data(
+        {
+            "kind": "started",
+            "runId": RUN_ID,
+            "performanceId": PERFORMANCE,
+            "step": 2,
+            "actor": "reviewer",
+        }
+    )
+    core.reply("perform", _in_theatre(), started, step)
+    ran = core.run("perform", "review")
+    assert ran.err == [
+        f"troupe: performance {PERFORMANCE} (review, 3 steps) starting",
+        f"troupe: step 2/3 reviewer: run {RUN_ID} starting; follow it from another terminal "
+        f"with `troupe logs {SHORT} --follow`",
+    ]

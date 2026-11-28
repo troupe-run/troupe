@@ -208,6 +208,8 @@ class _StepPlan:
     position: StepPosition = field(default_factory=lambda: StepPosition(1, 1))
     own_approvers: tuple[str, ...] | None = None
     """The step's own approvers in its flow; None when it sets none."""
+    own_direction: str | None = None
+    """The step's own direction in its flow; None when it sets none."""
 
     @property
     def approvers(self) -> StepApprovers | None:
@@ -232,3 +234,23 @@ def _approvers_data(step: _StepPlan) -> dict[str, object] | None:
 def _rehearsed_approvers(step: _StepPlan) -> m.ApproversData | None:
     data = _approvers_data(step)
     return m.ApproversData.from_data(data) if data is not None else None
+
+
+def plan_steps(merged: Merged, name: str) -> tuple[Performed, list[_StepPlan]]:
+    """What performing ``name`` runs: a flow's steps, in order, when config has a flow of that
+    name; otherwise the actor ``name``, as one step (spec: flows, "Performing a flow runs its
+    steps in order"). Flows and actors share one namespace, so it's never both."""
+    flows = merged.config.get("flows", {})
+    flow = flows.get(name) if isinstance(flows, dict) else None
+    if not isinstance(flow, dict):
+        return Performed("actor", name), [_StepPlan(_from_config(merged, name))]
+    steps = list(flow["steps"])
+    return Performed("flow", name), [
+        _StepPlan(
+            _from_config(merged, str(step["actor"])),
+            StepPosition(index, len(steps)),
+            tuple(step["approvers"]) if "approvers" in step else None,
+            step.get("direction"),
+        )
+        for index, step in enumerate(steps, start=1)
+    ]

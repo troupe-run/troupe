@@ -232,8 +232,15 @@ def test_updates_are_the_performance_then_the_run_id_then_each_event_as_recorded
             "kind": "performance-started",
             "performanceId": performance,
             "performed": {"kind": "actor", "name": "tester"},
+            "steps": 1,
         },
-        {"kind": "started", "runId": run_id, "performanceId": performance, "step": 1},
+        {
+            "kind": "started",
+            "runId": run_id,
+            "performanceId": performance,
+            "step": 1,
+            "actor": "tester",
+        },
     ]
     events = [u for u in harness.updates if u["kind"] == "event"]
     assert [(u["runId"], u["seq"], u["event"]["type"]) for u in events] == [

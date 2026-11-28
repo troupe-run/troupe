@@ -11,16 +11,19 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+from troupe.core import gates
 from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Send
 from troupe.core.errors import TroupeError
-from troupe.core.events import Command, EventStore
+from troupe.core.events import Approval, Command, EventStore
+from troupe.core.events.lineage import timestamp
 from troupe.core.masking import Masker
 from troupe.core.notices import Notice
 from troupe.core.runs import gate
 from troupe.core.runs.aggregate import Run
 from troupe.core.runs.backends import Backends as Backends
 from troupe.core.runs.backends import lease_dir as lease_dir
+from troupe.core.runs.changes import landing
 from troupe.core.runs.performance import Performance, outcome_of
 from troupe.core.runs.plan import (
     ContextFull,
@@ -326,30 +329,54 @@ class _Recorder:
         run.end(outcome, recording, changes)
         ended = run.collect_events()
         approvers = self.step.approvers
+        position = self.step.position
+        result = outcome.get("outcome")
         gated = (
             approvers is not None
             and changes is not None
-            and gate.reaches_gate(outcome.get("outcome"), changes)
+            and gate.reaches_gate(result, changes, last=position.last)
         )
         if not gated:
-            # No gate follows, so nothing more will happen in the performance: it ends with the
-            # run, in the same batch (performances design D3).
-            performance = self._performance()
-            performance.end(outcome_of(outcome.get("outcome"), changes))
-            over = performance.collect_events()
-            self.store.record_with_lineages(
-                [*ended, *over],
-                [self.agent.lineage()] * len(ended) + [self.person.lineage()] * len(over),
-            )
-            return
-        if approvers is None or changes is None or not gate.first_is_a_person(approvers.value):
-            # troupe goes first, after the end: it keeps the work, ending the performance, or
-            # passes the gate to a person (troupes_step).
+            if position.last or result != "succeeded":
+                # Nothing more will happen in the performance: it ends with the run, in the same
+                # batch (performances design D3). A flow that stops at a step stops whole.
+                performance = self._performance()
+                performance.end(outcome_of(result, changes))
+                over = performance.collect_events()
+                self.store.record_with_lineages(
+                    [*ended, *over],
+                    [self.agent.lineage()] * len(ended) + [self.person.lineage()] * len(over),
+                )
+                return
+            # A step before the last that changed nothing reaches no gate: the next goes on.
             self.agent.record(ended)
             return
+        if approvers is None or changes is None or not gate.first_is_a_person(approvers.value):
+            if position.last:
+                # troupe goes first, after the end: it keeps the work, ending the performance,
+                # or passes the gate to a person (troupes_step).
+                self.agent.record(ended)
+                return
+            # Before the last step, the work so far always applies to what the next step is
+            # built on, so troupe lets it go on at once, in the end's batch (actor-sequences
+            # design D5).
+            run.approve_changes(gates.TROUPE)
+            approved = run.collect_events()
+            troupe = gate.troupe_command(self.store, self.person)
+            approval = Approval(
+                actor=troupe.actor, role=gates.TROUPE, at=timestamp(self.store.clock())
+            )
+            self.store.record_with_lineages(
+                [*ended, *approved],
+                [self.agent.lineage()] * len(ended)
+                + [troupe.lineage(approvals=[approval])] * len(approved),
+            )
+            return
         # A person first: the cue is recorded with the end, so no perform that stops after the
-        # end leaves the run unasked (manual-gates design D3).
-        run.raise_cue(approvers.value[0], gate.brief(self.what.actor, "succeeded", changes))
+        # end leaves the run unasked (manual-gates design D3). At the last step its brief names
+        # what keeping the work lands: the performance's diff so far.
+        shown = {**changes, "diff": landing(changes)} if position.last else changes
+        run.raise_cue(approvers.value[0], gate.brief(self.what.actor, "succeeded", shown))
         cue = run.collect_events()
         troupe = gate.troupe_command(self.store, self.person)
         self.store.record_with_lineages(

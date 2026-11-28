@@ -331,6 +331,7 @@ CASES: list[tuple[object, str, st.SearchStrategy[Any]]] = [
                 "runId": RUN_IDS,
                 "performanceId": RUN_IDS,
                 "step": st.integers(min_value=1, max_value=10),
+                "actor": NAMES,
             },
             optional={"worktree": st.just(".troupe/local/worktrees/0f8fad5b")},
         )
@@ -338,7 +339,10 @@ CASES: list[tuple[object, str, st.SearchStrategy[Any]]] = [
             {
                 "kind": st.just("performance-started"),
                 "performanceId": RUN_IDS,
-                "performed": st.fixed_dictionaries({"kind": st.just("actor"), "name": NAMES}),
+                "performed": st.fixed_dictionaries(
+                    {"kind": st.sampled_from(["actor", "flow"]), "name": NAMES}
+                ),
+                "steps": st.integers(min_value=1, max_value=10),
             }
         )
         | logged_events()

@@ -132,9 +132,10 @@ class Worktree:
     clones: tuple[str, ...]
     baseline: str
     """The worktree's starting tree, as the VCS sees it, which the run's diff is taken from."""
-    built_on: str | None = None
+    own_baseline: str | None = None
     """For a flow's step after the first, the tree the worktree holds once the performance's
-    diff so far is applied: the step's own diff is taken from it (actor-sequences design D3)."""
+    diff so far is applied: the step's own diff is taken from it (actor-sequences design D3).
+    Not the run it was built on, which its start records as builtOn."""
 
     @property
     def cwd(self) -> Path:
@@ -185,7 +186,7 @@ def build_on(vcs: Vcs, worktree: Worktree, diff: Path, announce: Announce) -> Wo
         "building the step on the work so far", announce, defaults.WORKSPACE_ANNOUNCE_AFTER_SECONDS
     ):
         built = vcs.apply_in_worktree(worktree.path, diff)
-    return replace(worktree, built_on=built)
+    return replace(worktree, own_baseline=built)
 
 
 def _uncommitted(dirty: tuple[str, ...], base: str) -> Notice:
@@ -256,12 +257,12 @@ def capture(
         with announced(
             "capturing the run's changes", announce, defaults.WORKSPACE_ANNOUNCE_AFTER_SECONDS
         ):
-            own = worktree.built_on if worktree.built_on is not None else worktree.base
+            own = worktree.own_baseline if worktree.own_baseline is not None else worktree.base
             captured = vcs.capture(worktree.path, own, leave_out, out)
             data = _counts(captured)
             if not captured.empty:
                 data["diff"] = _store(out, artifacts)
-            if worktree.built_on is not None:
+            if worktree.own_baseline is not None:
                 sofar = vcs.capture(worktree.path, worktree.base, leave_out, out)
                 if not sofar.empty:
                     data["sofar"] = _store(out, artifacts)

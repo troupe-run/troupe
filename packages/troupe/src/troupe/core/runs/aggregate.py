@@ -26,6 +26,8 @@ A run is its own stream, keyed by its run id (a UUID minted by perform). Its eve
   with the working tree), so it passed the gate to the next approver. At most one, after the end
   and before any cue (manual-gates design D1, D4).
 - ``Run.CueRaised``: the gate reached a role a person holds, with a brief. At most one.
+- ``Run.ChangesApproved``: a flow's step before its last was let through its gate, so its work
+  goes on to the next step (actor-sequences design D5).
 - ``Run.ChangesAccepted``, ``Run.ChangesDiscarded`` or ``Run.ChangesRejected``: what was done with
   a worktree run's changes. At most one of them, after the end: settling is final (worktree-stage
   design D6, D7). While a cue is open, only an acceptance approved in the cue's role, or a
@@ -245,6 +247,19 @@ class Run(Aggregate):
     def _changes_discarded(self) -> None:
         self.settled = "discarded"
 
+    def approve_changes(self, role: str) -> None:
+        """Record that ``role`` let a flow's step's work go on to the next step (spec: flows,
+        "Before the last step, approving lets the work go on"). Refused before the end and once
+        the changes are settled; while a cue is open, only in the cue's role."""
+        self._can_settle()
+        if self.cue is not None and role != self.cue:
+            raise gates.waiting_at_gate(self.run_id, self.cue, discarding=False)
+        self._changes_approved(role=role)
+
+    @event("ChangesApproved")
+    def _changes_approved(self, role: str) -> None:
+        self.settled = "approved"
+
     def reject_changes(self, role: str) -> None:
         """Record that the open cue's role rejected the changes. Needs an open cue for ``role``."""
         self._can_settle()
@@ -267,6 +282,7 @@ CHANGES_DISCARDED = "troupe.core.runs.aggregate:Run.ChangesDiscarded"
 GATE_PASSED = "troupe.core.runs.aggregate:Run.GatePassed"
 CUE_RAISED = "troupe.core.runs.aggregate:Run.CueRaised"
 CHANGES_REJECTED = "troupe.core.runs.aggregate:Run.ChangesRejected"
+CHANGES_APPROVED = "troupe.core.runs.aggregate:Run.ChangesApproved"
 TOPICS = (
     STARTED,
     WORKTREE_MADE,
@@ -278,5 +294,6 @@ TOPICS = (
     GATE_PASSED,
     CUE_RAISED,
     CHANGES_REJECTED,
+    CHANGES_APPROVED,
 )
 """Every topic a run records."""
