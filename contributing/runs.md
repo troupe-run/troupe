@@ -20,7 +20,9 @@ event store ([contributing/event-store.md](event-store.md)). The runner contract
 2. **The actor comes from config:** its runner, the runner's options, its effect check (`expect`, each file once;
    `[]` is none) and its character, which `run/start` carries apart from the direction. Config is synced
    first, as every command that uses config does: hand edits recorded, then the files written.
-3. **The run id** is a new UUID. `perform` shows it at once, so you can follow the run from another terminal.
+3. **The performance's id and the run id** are new UUIDs. `perform` shows the performance's first, then the run's,
+   so you can follow the run from another terminal. Every perform is a performance of one step until flows
+   ([Performances](#performances)).
 4. **The run's lease** is taken: a lock on `.troupe/local/runs/<run id>/`, held while `perform` runs. Once it
    holds the lock, `perform` writes its process id there as `perform.pid`, with the platform seam's namespace
    token on the next line, so a lock that's still held after the process has ended can be told apart (see the
@@ -36,7 +38,7 @@ A run is its own stream, keyed by its run id. Its events, in order:
 
 | Event | When | Actor and via |
 |---|---|---|
-| `Run.Started` | Before the run's workspace is made and its runner starts, once every check that can refuse it has passed, and after its direction is stored. It holds the actor's name, the runner asked for, the stage's admission, the effect check, the direction's reference, the config version (the config stream's heads, sorted), the workspace: the worktree's path, base commit and whether the theatre was dirty, or `theatre`, the run's `onContextFull` with where it came from (`actor`, `policy` or `default`), and, for a worktree run, its approvers with where they came from (`actor` or `default`) | You, through `cli` |
+| `Run.Started` | Before the run's workspace is made and its runner starts, once every check that can refuse it has passed, and after its direction is stored, in the same batch as its performance's start. It holds its step in its performance (from 1), the actor's name, the runner asked for, the stage's admission, the effect check, the direction's reference, the config version (the config stream's heads, sorted), the workspace: the worktree's path, base commit and whether the theatre was dirty, or `theatre`, the run's `onContextFull` with where it came from (`actor`, `policy` or `default`), and, for a worktree run, its approvers with where they came from (`actor` or `default`) | You, through `cli` |
 | `Run.WorktreeMade` | For a worktree run, once its worktree is made and filled, before the runner starts. It holds the clone mechanisms | You, through `cli` |
 | `Run.Reported` | Once per run event, in `seq` order. It holds the event's `seq` and the event as received. The first is `init`, and a run's reported runner is read from it | The agent (`source: troupe`), through `runner` |
 | `Run.Noticed` | Once per notice troupe raises for the run, in the order it was raised among the run's events, before the end. It holds the notice, its credential masked. One raised before the start (planning the worktree) is recorded straight after it. It has no `seq` | You, through `cli` |
@@ -47,9 +49,24 @@ A run is its own stream, keyed by its run id. Its events, in order:
 | `Run.ChangesDiscarded` | When a person discards a worktree run's changes, after its worktree was removed. Refused while a cue is open | You, through `cli`, with no `stage` |
 | `Run.ChangesRejected` | When a person rejects a run's open cue, after its worktree was removed. It holds the role the cue was for | You, through `cli`, with no `stage` |
 
-All of a run's events share one change id. `seq` is the runner's numbering, kept in the payload; it isn't the
-stream's version, which counts `Run.Started` too. Recording a `seq` that isn't the next one is refused
-(`run.out-of-sequence`).
+All of a run's events share one change id, and every one names the run's performance in its lineage. `seq` is the
+runner's numbering, kept in the payload; it isn't the stream's version, which counts `Run.Started` too. Recording a
+`seq` that isn't the next one is refused (`run.out-of-sequence`).
+
+### Performances
+
+Every perform records a performance (`troupe.core.runs.performance`), its own stream keyed by its id. Each step is a
+run; until flows, a performance has one.
+
+| Event | When | Actor and via |
+|---|---|---|
+| `Performance.Started` | In the same batch as its first run's start, so neither is recorded without the other. It holds what was performed (`{kind: actor, name}`), its steps (each step's actor, and its approvers with where they came from for a worktree run), the direction's reference and the config version | You, through `cli` |
+| `Performance.Ended` | Once nothing more will happen in it, in the same batch as what settled it: the run's end (`completed`, `failed` or `cancelled`; `failed` too for a run that succeeded but whose changes couldn't be captured) when no gate follows, troupe's acceptance at the gate (`completed`), or a person's approve (`completed`) or reject (`rejected`). A performance whose work waits at a gate has none. A second end is refused (`performance.out-of-sequence`) | Whoever recorded the event it's batched with (you for the run's end), with no approval |
+
+Every event in a performance's or a run's stream names the performance in its lineage, and no other event does: the
+event store refuses either mistake (`events.lineage-invalid`), and each event's schema says the same. Reading runs back
+refuses a store holding a run whose start names no performance, which a troupe before performances wrote, with
+`run.recorded-before-performances` (see [contributing/releasing.md](releasing.md#records-an-older-troupe-wrote)).
 
 **A run's notices** are every notice `perform` raises for it from when it mints the run id until the end is recorded:
 the run host's (`run.silent`, `run.retrying`, `run.estimate-dropped`, `run.scratch-not-removed`) and the workspace
@@ -100,8 +117,9 @@ show how far it got. Lease directories stay in `.troupe/local/runs/` (they're lo
 
 ## Reading runs
 
-`troupe status` lists the most recent runs, newest first (`STATUS_RUNS_LIMIT` of them, or `--limit`). `troupe status
-<run>` shows one run: its actor, who started it, its runner, its stage, its state, its outcome and error, how many
+`troupe status` lists the most recent performances, newest first (`STATUS_RUNS_LIMIT` of them, or `--limit`), each
+line starting with the performance's id and its run's first 8 characters. `troupe status <run>` shows one run: its
+performance and step, its actor, who started it, its runner, its stage, its state, its outcome and error, how many
 events it has, the notices it recorded, its times, and its transcript's and standard error's references, with the
 transcript's format. The list adds a count to a run's line when it recorded notices.
 
@@ -122,7 +140,8 @@ Ctrl-C, saying why.
   once the run reads as interrupted: nobody holds the lease, or it's still held but its `perform.pid` names a
   process that has ended in the reader's pid namespace (see the states above).
 
-A run is named by its full id or by a prefix of at least 8 hex digits that matches exactly one run. Both commands
+A run is named by its full id, its performance's, or a prefix of at least 8 hex digits that matches exactly one run or
+performance; a performance names its run when it has exactly one (`performance.several-runs` otherwise). Both commands
 work from another terminal while a run is going: they read the event store, which `perform` writes as it goes.
 
 ## Stages
@@ -223,7 +242,7 @@ errors and notices (`run.silent`, `run.retrying`, `run.estimate-dropped`) in
 | `policy.compaction-forbidden` | The actor's `onContextFull` is `compact`, and the `compaction` policy is `none` |
 | `run.out-of-sequence` | A run event isn't the next one its run expects, or a run event or notice arrived after the run ended: a fault, never retried |
 | `run.recording-failed` | A run event, a notice raised for the run, or the run's end, couldn't be recorded, so the run was stopped |
-| `run.not-found` | No run here has an id starting with what was given |
+| `run.not-found` | No run or performance here has an id starting with what was given |
 | `run.ambiguous-id` | More than one run or performance has an id starting with what was given; it lists them |
 | `performance.several-runs` | A performance id was given where one run is meant, and the performance has more than one run; it lists them |
 | `performance.out-of-sequence` | A performance's end was recorded after it had already ended: a fault, never retried |

@@ -25,7 +25,7 @@
           }
         }
       ],
-      "description": "Its lineage names no performance: a config event isn't part of one."
+      "description": "Where the event came from. It names no performance: config isn't part of one."
     },
     "timestamp": {
       "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"

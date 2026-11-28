@@ -500,6 +500,21 @@ def test_a_capture_that_fails_is_recorded_and_the_worktree_kept(repo: Repo) -> N
     assert run.changes.state == "uncaptured"
 
 
+def test_a_run_whose_capture_fails_ends_its_performance_failed(repo: Repo) -> None:
+    # Its work can never reach its gate, so the performance fails though the run succeeded
+    # (spec: performances; owner, 2026-11-28, troupe#545).
+    made = harness(repo, store_wrapper=_replacing("capture", _vcs_failed))
+    asked = configured(made, INIT, write("a.txt", "a\n"), OK, effects={"write": ["**"]})
+    run = made.perform(asked).run
+    assert run.outcome == "succeeded"
+    assert run.changes is not None
+    assert run.changes.state == "uncaptured"
+    store = made.stores[-1]
+    [*_, ended] = store.history(UUID(run.performance_id))
+    assert ended.topic.endswith("Performance.Ended")
+    assert json.loads(ended.state)["outcome"] == "failed"
+
+
 # Requirement: The worktree is kept until the changes are accepted or discarded
 
 

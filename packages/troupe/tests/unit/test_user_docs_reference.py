@@ -82,6 +82,15 @@ def test_the_events_page_lists_every_event_schema_with_every_field() -> None:
             assert f"| `{name}` |" in page
 
 
+def test_a_reference_narrowed_by_a_rule_beside_it_holds_what_the_reference_holds() -> None:
+    # Every event's lineage is lineage.schema.json with a rule on `performance` beside it, in
+    # allOf: the table says it's lineage, never `any` (performances design D5).
+    page = (ROOT / "docs" / "prompt-book" / "events.md").read_text(encoding="utf-8")
+    rows = [line for line in page.splitlines() if line.startswith("| `lineage` |")]
+    assert rows
+    assert all(row.startswith("| `lineage` | object (Lineage) |") for row in rows)
+
+
 def test_the_cli_page_lists_every_command_and_option() -> None:
     page = (ROOT / "docs" / "prompt-book" / "cli.md").read_text(encoding="utf-8")
     for command in COMMANDS:

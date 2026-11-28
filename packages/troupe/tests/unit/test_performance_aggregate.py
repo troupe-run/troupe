@@ -68,3 +68,9 @@ def test_a_second_end_is_refused_as_a_fault_and_writes_nothing(tmp_path: Path) -
 )
 def test_a_performances_outcome_follows_its_runs(run_outcome: str, expected: str) -> None:
     assert outcome_of(run_outcome) == expected
+
+
+def test_a_run_that_succeeded_but_whose_changes_werent_captured_fails_its_performance() -> None:
+    error = {"code": "vcs.failed", "problem": "p", "fix": "f"}
+    assert outcome_of("succeeded", {"error": error}) == "failed"
+    assert outcome_of("succeeded", {"diff": "sha256:" + "a" * 64}) == "completed"

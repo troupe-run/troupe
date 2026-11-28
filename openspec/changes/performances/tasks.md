@@ -74,7 +74,7 @@
 
 ## Workflow follow-up
 
-- Draft PR "Part of #124", with the commit that changes the protocol marked `feat(protocol)!:` and a
+- Draft PR "Part of #124", with the commit that changes the protocol marked breaking (`!`, as `feat(runs)!:`) and a
   `BREAKING CHANGE:` footer.
 - Act on Claude's review, mark the PR ready, then archive.
 - After the merge: troupe-run/infrastructure's pull request recording the `performances` spec's Purpose.

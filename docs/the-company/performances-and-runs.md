@@ -26,7 +26,7 @@ A performance is recorded as its own stream of events:
   its own worktree, its approvers and where they came from), the direction, by reference, and the config version.
   It's recorded together with its run's start, so neither is ever there without the other.
 - **`Performance.Ended`:** how it ended, once nothing more will happen in it: `completed` when its run succeeded and
-  its work was kept, or there was none; `failed` when its run didn't succeed; `rejected` when its work was rejected
+  its work was kept, or there was none; `failed` when its run didn't succeed, or its changes couldn't be captured; `rejected` when its work was rejected
   at its gate; `cancelled` when you cancelled its run. It's recorded together with whatever settled it: the run's
   end, troupe keeping its work, or your answer at the gate. A performance whose work waits for you hasn't ended.
 

@@ -150,8 +150,9 @@ troupe status
 troupe logs <run>
 ```
 
-`troupe status` lists your runs, newest first. `troupe logs <run>` shows one run's events in order, each with when
-troupe recorded it: name the run by its id or its first 8 characters. Add `--follow` to watch a run from another
+`troupe status` lists your performances, newest first, each with its run. `troupe logs <run>` shows one run's events
+in order, each with when troupe recorded it: name the run by its id, its performance's, or the first 8 characters of
+either. Add `--follow` to watch a run from another
 terminal while it's going.
 
 A run that fails says why in `troupe logs`, such as the budget it reached, and what it should do next. Every run's

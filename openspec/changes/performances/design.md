@@ -92,7 +92,8 @@ so with it the performance's end is `perform`'s person command's.
 performance ended with the run.
 
 The outcome comes from the run's: `succeeded` → `completed`, `cancelled` → `cancelled`, every other outcome →
-`failed`.
+`failed`. A run that succeeded but whose changes couldn't be captured is `failed` too: its work can never reach its
+gate, and only a discard settles it (owner, 2026-11-28, on the review of troupe#545).
 
 A `perform` that dies before the end leaves the performance with no end, as it leaves the run. Its state is the run's
 state, worked out from the lease.
