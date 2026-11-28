@@ -3,9 +3,12 @@
 Its tests that stay in their own process are in unit/test_hypothesis_profiles_unit.py."""
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 TESTS_ROOT = next(p for p in Path(__file__).resolve().parents if p.name == "tests")
 """This suite's tests directory, found by name so the file can sit at any depth under it."""
@@ -201,3 +204,85 @@ def test_a_storage_directory_from_the_environment_keeps_the_examples_out_of_the_
     assert not (repo / ".hypothesis").exists()
     assert not (repo / "packages" / "troupe" / ".hypothesis").exists()
     assert replayed_the_failure(run_found(repo, repo, replay_only=True, storage=private))
+
+
+UNIT_TEST = "test_hypothesis_profiles_unit.py"
+PACKAGE = Path("packages") / "troupe"
+
+
+def checkout_under_another_directory(tmp_path: Path) -> Path:
+    """A checkout at ``tmp_path/target``, as the nightly mutation run checks troupe out: the root's
+    pytest configuration loading the plugin, the plugin and its unit test at their places, and the
+    package's own pyproject.toml, which holds no pytest configuration."""
+    repo = tmp_path / "target"
+    (repo / PACKAGE / "tests" / "unit").mkdir(parents=True)
+    (repo / "pyproject.toml").write_text(
+        '[tool.pytest.ini_options]\npythonpath = ["packages/troupe/tests"]\n'
+        'addopts = "-p hypothesis_profiles"\n',
+        encoding="utf-8",
+    )
+    (repo / PACKAGE / "pyproject.toml").write_text('[project]\nname = "troupe"\n', encoding="utf-8")
+    for name in ("hypothesis_profiles.py", f"unit/{UNIT_TEST}"):
+        (repo / PACKAGE / "tests" / name).write_bytes((TESTS_ROOT / name).read_bytes())
+    return repo
+
+
+def mutmut_copy(repo: Path) -> Path:
+    """The package's tests and files as mutmut copies them, to ``packages/troupe/mutants``, with
+    the entries of each directory above linked in, as infrastructure's mutation_run.py
+    (link_checkout_entries) links them: the root's pyproject.toml into packages/ among them (#543).
+    Returns the directory mutmut runs the tests from."""
+    package = repo / PACKAGE
+    mutants = package / "mutants"
+    mutants.mkdir()
+    shutil.copytree(package / "tests", mutants / "tests")
+    shutil.copy2(package / "pyproject.toml", mutants / "pyproject.toml")
+    for level in (package, package.parent):
+        for entry in sorted(level.parent.iterdir()):
+            link = level / entry.name
+            if entry.name != ".git" and not (link.exists() or link.is_symlink()):
+                link.symlink_to(Path("..") / entry.name, target_is_directory=entry.is_dir())
+    return mutants
+
+
+def can_symlink(directory: Path) -> bool:
+    try:
+        (directory / "probe-link").symlink_to("probe-target")
+    except OSError:
+        return False  # Windows without Developer Mode or the privilege
+    (directory / "probe-link").unlink()
+    return True
+
+
+@pytest.mark.parametrize("layout", ["root", "package", "mutmut copy"])
+def test_the_database_and_its_test_agree_in_a_checkout_under_another_directory(
+    tmp_path: Path, layout: str
+) -> None:
+    # #543: under the nightly mutation run's layout the unit test took packages/ for the root.
+    repo = checkout_under_another_directory(tmp_path)
+    test = Path("tests") / "unit" / UNIT_TEST
+    extra: list[str] = []
+    if layout == "root":
+        cwd, test = repo, PACKAGE / test
+    elif layout == "package":
+        cwd = repo / PACKAGE
+    else:
+        if not can_symlink(tmp_path):
+            pytest.skip("this platform account can't make symbolic links")
+        cwd = mutmut_copy(repo)
+        extra = ["-o", "addopts=-p hypothesis_profiles"]  # as mutation_run.py's setup.cfg passes it
+    completed = subprocess.run(
+        [
+            *[sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *extra],
+            *["--confcutdir", str(repo), "--hypothesis-profile=default"],
+            *["-k", "test_every_run_shares_the_roots_example_database", str(test)],
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+        cwd=cwd,
+        env={k: v for k, v in os.environ.items() if k != "HYPOTHESIS_STORAGE_DIRECTORY"},
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert "1 passed" in completed.stdout, completed.stdout
