@@ -38,10 +38,10 @@ Every event of a performance and of its runs names the performance in its [linea
 its run's first 8 characters, then the run as before. `troupe status <run>` shows the run's performance and its step.
 
 **Runs from before performances.** Runs recorded by a troupe before 0.5.0 have no performance, and this troupe
-doesn't read them. `status`, `logs` and every command that reads runs refuse with
-`run.recorded-before-performances`, naming those runs and the files in `.troupe/events/` that hold them: the ones that
-hold nothing else, which you can remove and commit to go on without those runs, and the ones that hold other events
-too, to keep. Or read them with a troupe before 0.5.
+doesn't read them. `perform` refuses before it runs anything, and `status`, `logs` and every command that reads runs
+refuse too, with `run.recorded-before-performances`, naming those runs and the files in `.troupe/events/` that hold
+them: the ones that hold nothing else, which you can remove and commit to go on without those runs, and the ones that
+hold other events too, to keep. Or read them with a troupe before 0.5.
 
 ## A run
 

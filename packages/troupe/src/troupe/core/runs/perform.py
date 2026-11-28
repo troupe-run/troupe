@@ -65,6 +65,7 @@ from troupe.core.runs.backends import Backends as Backends
 from troupe.core.runs.backends import lease_dir as lease_dir
 from troupe.core.runs.performance import Performance, outcome_of
 from troupe.core.runs.projections import fold_runs
+from troupe.core.runs.queries import read_runs
 from troupe.core.runtimes import RunRuntime
 from troupe.core.stages import load_stage
 from troupe.core.vcs import SharedState, Vcs
@@ -637,6 +638,9 @@ async def perform(
     base: tuple[str, str] | None = None
     if what.workspace == "worktree":
         base = await asyncio.to_thread(worktree_base, vcs, what.actor)
+    # A theatre holding runs from before performances is refused here, before anything runs or is
+    # recorded, rather than at troupe's turn at the gate, after the work (performances design D8).
+    await asyncio.to_thread(read_runs, store)
     if request.rehearse:
         return m.PerformResult(
             rehearsal=m.Rehearsal(

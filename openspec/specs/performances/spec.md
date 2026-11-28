@@ -60,7 +60,8 @@ A performance's end SHALL be recorded once nothing more will happen in it, with 
 - `rejected`: its work was turned down at a gate or discarded.
 - `cancelled`: a step was cancelled.
 
-A performance whose work waits at a gate, or whose `perform` stopped without an end, SHALL have no end.
+A performance whose work waits at a gate, or whose `perform` stopped without an end, SHALL have no end until a
+person settles its run.
 
 #### Scenario: A run that succeeds without changes
 - **WHEN** a person performs an actor whose run succeeds and changes nothing
@@ -149,6 +150,11 @@ commit the files that hold nothing else. It SHALL NOT be read without a performa
 #### Scenario: A file shared with a config change
 - **WHEN** such a run's start is in the same file as a config change, and a person runs `troupe status`
 - **THEN** the refusal names that file as one that holds other events, to keep
+
+#### Scenario: Perform refuses before it runs anything
+- **WHEN** a theatre holds such a run, and a person performs an actor, for real or with `--rehearse`
+- **THEN** it is refused with `run.recorded-before-performances` before any performance or run is recorded, and
+  no runner starts
 
 ### Requirement: A run is listed and summarised with its performance
 A performance of one step SHALL be listed by `status` as its run, naming the performance. Every run summary that

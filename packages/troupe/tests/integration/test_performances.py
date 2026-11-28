@@ -301,3 +301,54 @@ def test_settling_a_run_whose_performance_was_left_open_ends_it_in_the_same_batc
     assert settled["state"]["lineage"]["approvals"] == []
     assert ended["state"]["lineage"]["approvals"] == []
     assert ended["state"]["lineage"]["performance"] == run.performance_id
+
+
+# Requirement: A run recorded before performances is refused with its fix (perform refuses first)
+
+
+def _record_an_old_run(made: Harness) -> str:
+    """A run's start as a troupe before performances recorded it, with no performance in its
+    lineage. The service refuses to record that now, so it goes to the recorder directly."""
+    from protocol_guard import unchecked
+    from troupe.core.runs.aggregate import Run
+
+    run_id = "01d00000-0000-4000-8000-000000000000"
+    run = Run(
+        run_id=run_id,
+        actor="tester",
+        runner_requested="scripted",
+        stage={
+            "name": "local",
+            "effects": "unenforced",
+            "allowedBy": {"setting": "allow_unenforced_local_stage", "source": "env"},
+        },
+        effect_check={"kind": "none"},
+        direction="sha256:" + "a" * 64,
+        config=["sha256:" + "b" * 64],
+        workspace={"kind": "theatre"},
+        on_context_full={"value": "fail", "source": "default"},
+        step=1,
+    )
+    store = made.backends().event_store(made.session())
+    lineage = store.command(via="cli").lineage().to_data()
+    with unchecked():  # invalid on purpose: an older troupe's record
+        stored = [store._stored(event, lineage) for event in run.collect_events()]
+    store.recorder.insert(stored)
+    return run_id
+
+
+@pytest.mark.parametrize("rehearse", [False, True], ids=["for real", "rehearsed"])
+def test_perform_refuses_a_theatre_holding_a_run_from_before_performances_before_running(
+    repo: Repo, rehearse: bool
+) -> None:
+    made = Harness(repo)
+    old = _record_an_old_run(made)
+    asked = configured(made, INIT, write("src/a.txt", "two\n"), OK, effects=EVERYWHERE)
+    before = {line["id"] for line in recorded_lines(repo.path)}
+    with pytest.raises(TroupeError) as caught:
+        made.perform_result({**asked, **({"rehearse": True} if rehearse else {})})
+    assert caught.value.code == "run.recorded-before-performances"
+    assert caught.value.details["runs"] == [old]
+    after = [line for line in recorded_lines(repo.path) if line["id"] not in before]
+    assert not [line for line in after if line["topic"].startswith("troupe.core.runs.")]
+    assert not [u for u in made.updates if u.get("kind") in ("started", "event")]

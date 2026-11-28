@@ -18,6 +18,7 @@ import asyncio
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 from troupe.core import gates
 from troupe.core.client import messages as m
@@ -39,7 +40,7 @@ from troupe.core.runs.changes import (
     settled_error,
     view_of,
 )
-from troupe.core.runs.projections import RunView
+from troupe.core.runs.projections import RunView, fold_runs
 from troupe.core.workspaces import remove_worktree
 
 
@@ -100,7 +101,8 @@ def troupes_step(
     approver and raise its cue. Under the run's settle lock, so a person's accept can't race it."""
     command = troupe_command(store, person)
     with directory_lock(settle_lock(theatre, run_id)):
-        view = view_of(store, run_id)
+        # This run's own events only: troupe's turn doesn't depend on any other run in the store.
+        [view] = fold_runs(store.history(UUID(run_id))).values()
         changes = view.changes() or {}
         if changes.get("state") != "pending":
             return  # settled meanwhile: nothing for troupe to do
