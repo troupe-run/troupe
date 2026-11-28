@@ -527,10 +527,13 @@ def test_settling_a_stream_that_isnt_a_run_is_a_type_error(theatre: Theatre) -> 
         changes.record_settling(theatre.store, stream, None, lambda r: None)
 
 
-def test_settling_twice_takes_the_settle_lock_again(theatre: Theatre) -> None:
+def test_a_settle_lock_an_earlier_settling_left_is_reused(theatre: Theatre) -> None:
     run = theatre.run()
+    lease = lease_dir(theatre.path, run.run_id)
     theatre.call(changes.discard, m.DiscardRequest(_ref(run), rehearse=True))
+    assert [p.name for p in lease.iterdir()] == ["settle"]
     theatre.call(changes.discard, m.DiscardRequest(_ref(run)))
+    assert [p.name for p in lease.iterdir()] == ["settle"]
     assert theatre.topics(run)[-1] == "Run.ChangesDiscarded"
 
 
