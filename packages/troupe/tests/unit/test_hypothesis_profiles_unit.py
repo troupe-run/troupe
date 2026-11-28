@@ -5,6 +5,7 @@ integration/test_hypothesis_profiles.py."""
 
 from pathlib import Path
 
+import pytest
 from hypothesis import settings
 from hypothesis.database import DirectoryBasedExampleDatabase
 
@@ -23,21 +24,16 @@ def test_ci_still_uses_fixed_seeds_and_no_database() -> None:
     assert ci.database is None
 
 
-def repository_root() -> Path:
-    """The directory holding the root pyproject.toml, the one with pytest's configuration."""
-    return next(
-        p
-        for p in Path(__file__).resolve().parents
-        if (p / "pyproject.toml").is_file()
-        and "[tool.pytest.ini_options]" in (p / "pyproject.toml").read_text("utf-8")
-    )
-
-
-def test_every_run_shares_the_roots_example_database() -> None:
+def test_every_run_shares_the_roots_example_database(pytestconfig: pytest.Config) -> None:
     # #537: a failure found from packages/troupe was never replayed by the check from the root.
+    # The root is where the configuration this run uses really is: the nightly mutation run links
+    # the root's pyproject.toml into packages/ beside mutmut's copy, and pytest reads it there
+    # (#543).
+    assert pytestconfig.inipath is not None, "the run found no pytest configuration"
+    root = pytestconfig.inipath.resolve().parent
     database = shared_database({})
     assert isinstance(database, DirectoryBasedExampleDatabase)
-    assert Path(database.path) == repository_root() / ".hypothesis" / "examples"
+    assert Path(database.path) == root / ".hypothesis" / "examples"
 
 
 def test_a_storage_directory_from_the_environment_leaves_hypothesiss_own_database() -> None:
