@@ -694,3 +694,8 @@ database.
 #### Scenario: A storage directory set in the environment
 - **WHEN** a run has `HYPOTHESIS_STORAGE_DIRECTORY` set, as each flake hunt round does
 - **THEN** its examples go to that directory, and the repository's database is unchanged
+
+#### Scenario: A mutation tool's copy of a checkout under another directory
+- **WHEN** the repository is checked out under another directory, and its tests run from a mutation tool's copy with
+  the checkout's entries linked beside it, as the nightly mutation run lays them out
+- **THEN** the database is the checkout's `.hypothesis/examples`, and the tests that check where it is pass
