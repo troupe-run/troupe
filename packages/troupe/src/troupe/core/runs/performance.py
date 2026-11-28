@@ -11,8 +11,10 @@ beside the run id. Its events:
   version.
 - ``Performance.Ended``: once nothing more will happen in it, with its outcome: ``completed``,
   ``failed``, ``rejected`` or ``cancelled``. It is recorded in the same batch as the event that
-  settles the performance (the run's end, troupe's acceptance, or a person's answer at the gate). A
-  performance whose work waits at a gate, or whose perform stopped without an end, has none.
+  settles the performance: the run's end, troupe's acceptance, a person's answer at the gate, or a
+  person's accept or discard of a run whose perform stopped before the performance ended. A
+  performance whose work waits at a gate, or whose perform stopped without an end, has none until
+  then.
 
 Every event of a performance, and of its runs, names it in its lineage (spec: lineage). A second
 end is a fault (a bug or a replay), never retried. The topics are these classes' import paths, so

@@ -45,8 +45,10 @@
 - [x] 4.1 `approve` records the acceptance and the performance's end (`completed`) in one batch, and `reject` the
   rejection and the end (`rejected`). Both name the performance in their lineage. Verify: gate tests read both events
   and their lineage.
-- [x] 4.2 `accept` and `discard` name the run's performance in their lineage, and record nothing in the performance.
-  Verify: settling tests for a failed run's accept and discard.
+- [x] 4.2 `accept` and `discard` name the run's performance in their lineage. They record nothing in a performance that
+  has ended (a failed run's), and end one its perform left open: accept → `completed`, discard → `rejected` (owner,
+  2026-11-28). Verify: settling tests for a failed run's accept and discard, and
+  `test_settling_a_run_whose_performance_was_left_open_ends_it_in_the_same_batch`.
 
 ## 5. Reading performances back
 
