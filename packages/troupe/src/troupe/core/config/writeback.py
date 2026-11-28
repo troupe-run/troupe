@@ -25,8 +25,14 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from functools import cache
 from typing import TYPE_CHECKING, Any
 
-from troupe.core.config.kinds import ACTORS
-from troupe.core.config.projection import FIELD_ORDER, RUNTIME_FIELD_ORDER, _sorted, _yaml
+from troupe.core.config.kinds import ACTORS, FLOWS, RUNTIMES
+from troupe.core.config.projection import (
+    FIELD_ORDER,
+    FLOW_FIELD_ORDER,
+    RUNTIME_FIELD_ORDER,
+    _sorted,
+    _yaml,
+)
 from troupe.core.config.reading import SCHEMA_KEY, owner, read_values
 from troupe.core.errors import TroupeError
 from troupe.core.theatre import THEATRE_DIR
@@ -52,7 +58,7 @@ def write_back(path: str, data: bytes, values: Mapping[str, Any]) -> bytes:
     current = read_values(path, data).values
     if current == dict(values):
         return data
-    top = FIELD_ORDER if kind == ACTORS else RUNTIME_FIELD_ORDER
+    top = {ACTORS: FIELD_ORDER, RUNTIMES: RUNTIME_FIELD_ORDER, FLOWS: FLOW_FIELD_ORDER}[kind]
     crlf = _crlf(text)
     splices: list[Splice] = []
     _mapping(text, _compose(text), current, dict(values), top, crlf, splices, top_level=True)

@@ -46,7 +46,7 @@ from troupe.core import strict_json
 from troupe.core.config.aggregate import CHANGED
 from troupe.core.config.changes import RENAMED_FROM, Tree, apply, value_hash
 from troupe.core.config.entities import Named, Names, entities
-from troupe.core.config.kinds import ACTORS, KINDS, RUNTIMES, problems
+from troupe.core.config.kinds import ACTORS, FLOWS, KINDS, RUNTIMES, problems
 from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe.core.events.port import RecordedEvent
@@ -397,7 +397,7 @@ def _invalid(
     found: list[Conflict] = []
     seen: set[Point] = set()
     for problem in problems(config):
-        grouped = problem.path[:1] in ((ACTORS,), (RUNTIMES,))
+        grouped = problem.path[:1] in ((ACTORS,), (RUNTIMES,), (FLOWS,))
         where = problem.path[:2] if grouped else problem.path[:1]
         if where in seen or any(_overlaps(p, where) for c in structural for p in c.paths):
             continue

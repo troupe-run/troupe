@@ -18,8 +18,9 @@ are #5 (net change at command boundaries), #6 (layout), #7 (schemas), #135 (valu
   value's canonical JSON, absent when there was none; `after` is the new value, absent when it was removed, and never
   an object, since an object is a group of values (#135). Removing a group is one entry addressed to it.
 - **A rename** is one entry, `{"path": [kind, new], "renamedFrom": [kind, old], "before": <the group's hash>}`, with no
-  `after`: a whole actor or runtime moves to the new name (#138). A runtime's rename also sets `runtime` on each actor
-  that names it, as ordinary entries in the same change. No other entry in a change touches the names a rename moves
+  `after`: a whole actor, runtime or flow moves to the new name (#138). A runtime's rename also sets `runtime` on each
+  actor that names it, and an actor's rename sets the steps of each flow that names it, as ordinary entries in the same
+  change. No other entry in a change touches the names a rename moves
   between, so `changes.apply` applies it where it stands in the list.
 - **`Config.Settled`** ends a fork in the config stream, recorded with the first change after a merge, in the same
   batch ([`events/config-settled.schema.json`](../protocol/schemas/events/config-settled.schema.json)).

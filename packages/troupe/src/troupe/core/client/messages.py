@@ -163,6 +163,8 @@ class WorktreeWorkspace(Tagged):
     base: str = json_field("base", pattern=COMMIT)
     dirty: bool = json_field("dirty")
     prefix: str | None = json_field("prefix", default=None, pattern=PREFIX)
+    built_on: str | None = json_field("builtOn", default=None, pattern=p.RUN_ID_PATTERN)
+    """The run of the flow's step before, whose work so far the worktree was built on."""
     clones: list[CloneMechanism] | None = json_field("clones", default=None, unique=True)
 
 
@@ -189,7 +191,7 @@ class SharedData(Message):
 
 
 ChangesState = Literal[
-    "waiting", "pending", "accepted", "discarded", "rejected", "none", "uncaptured"
+    "waiting", "pending", "approved", "accepted", "discarded", "rejected", "none", "uncaptured"
 ]
 GateRole = Literal["troupe", "director"]
 
@@ -251,7 +253,7 @@ class ApproversData(Message):
     run's start records its approvers and where they came from")."""
 
     value: list[GateRole] = json_field("value", min_items=1)
-    source: Literal["actor", "default"] = json_field("source")
+    source: Literal["step", "actor", "default"] = json_field("source")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -260,6 +262,8 @@ class ChangesData(Message):
 
     state: ChangesState = json_field("state")
     diff: str | None = json_field("diff", default=None, pattern=p.REF_PATTERN)
+    sofar: str | None = json_field("sofar", default=None, pattern=p.REF_PATTERN)
+    """The performance's diff so far, through this step (actor-sequences design D4)."""
     added: int | None = json_field("added", default=None, minimum=0)
     modified: int | None = json_field("modified", default=None, minimum=0)
     deleted: int | None = json_field("deleted", default=None, minimum=0)
@@ -273,15 +277,19 @@ class ChangesData(Message):
     """The files keeping them changed; None unless accepted."""
 
     def _check(self, where: str) -> None:
-        if self.state in ("pending", "waiting") and (self.diff is None or self.worktree is None):
-            raise fail(where, f"{self.state} changes have a diff and a worktree")
+        if self.state in ("pending", "waiting") and (
+            (self.diff is None and self.sofar is None) or self.worktree is None
+        ):
+            raise fail(where, f"{self.state} changes have a diff or a diff so far, and a worktree")
         if (self.state == "waiting") != (self.cue is not None):
             raise fail(where, "cue is present exactly when state is waiting")
-        if self.state in ("none", "uncaptured") and (self.diff is not None or not self.worktree):
-            raise fail(where, f"{self.state} changes have a worktree and no diff")
+        if self.state in ("none", "uncaptured") and (
+            self.diff is not None or self.sofar is not None or not self.worktree
+        ):
+            raise fail(where, f"{self.state} changes have a worktree and no diff or diff so far")
         if self.files is not None and self.state != "accepted":
             raise fail(where, "files are present only when the changes were accepted")
-        settled = self.state in ("accepted", "discarded", "rejected")
+        settled = self.state in ("approved", "accepted", "discarded", "rejected")
         if settled != (self.settled_at is not None):
             raise fail(where, "settledAt is present exactly when the changes are settled")
         if settled and self.worktree is not None:
@@ -465,7 +473,7 @@ class LoggedEvent(Tagged):
 class Performed(Message):
     """What a performance performs: an actor, by its name then (spec: performances)."""
 
-    kind: Literal["actor"] = json_field("kind")
+    kind: Literal["actor", "flow"] = json_field("kind")
     name: str = json_field("name", pattern=ACTOR_NAME)
 
 
@@ -477,6 +485,8 @@ class PerformanceStarted(Tagged):
     TYPE: ClassVar[str | None] = "performance-started"
     performance_id: str = json_field("performanceId", pattern=p.RUN_ID_PATTERN)
     performed: Performed = json_field("performed")
+    steps: int = json_field("steps", minimum=1)
+    """How many steps the performance has: one for an actor, a flow's number of steps."""
 
 
 @dataclass(frozen=True)
@@ -485,6 +495,7 @@ class Started(Tagged):
     run_id: str = json_field("runId", pattern=p.RUN_ID_PATTERN)
     performance_id: str = json_field("performanceId", pattern=p.RUN_ID_PATTERN)
     step: int = json_field("step", minimum=1)
+    actor: str = json_field("actor", pattern=ACTOR_NAME)
     worktree: str | None = json_field("worktree", default=None, pattern=THEATRE_PATH)
 
 
@@ -622,6 +633,18 @@ class Rehearsal(Message):
     runtime: ResolvedRuntime | None = json_field("runtime", default=None)
     approvers: ApproversData | None = json_field("approvers", default=None)
     """None for a run in the theatre, which has no gate."""
+    flow: str | None = json_field("flow", default=None, pattern=ACTOR_NAME)
+    """The flow that would be performed; None for an actor."""
+    steps: list["Rehearsal"] | None = json_field("steps", default=None, min_items=1)
+    """Each of a flow's steps as its run would start (spec: flows, "Performing a flow runs its
+    steps in order"); None for an actor. The fields above are the first step's."""
+
+    def _check(self, where: str) -> None:
+        if (self.flow is None) != (self.steps is None):
+            raise fail(where, "flow and steps are present together")
+        for step in self.steps or ():
+            if step.flow is not None or step.steps is not None:
+                raise fail(where, "a step's rehearsal holds no flow or steps of its own")
 
 
 @dataclass(frozen=True)

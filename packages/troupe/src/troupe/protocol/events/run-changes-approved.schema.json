@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/events/run-changes-approved.schema.json",
+  "title": "Run.ChangesApproved",
+  "description": "The payload of an approval at a flow's step before its last (topic troupe.core.runs.aggregate:Run.ChangesApproved): the step's work goes on to the next step, built on it, and nothing reaches the theatre yet. Its lineage carries the approval, troupe's in role troupe or a person's in the cue's role. Final: nothing else settles the run's changes after it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lineage",
+    "timestamp",
+    "role"
+  ],
+  "properties": {
+    "lineage": {
+      "allOf": [
+        {
+          "$ref": "../lineage.schema.json"
+        },
+        {
+          "required": [
+            "performance"
+          ]
+        }
+      ],
+      "description": "Where the event came from. It names the performance the run is a step of."
+    },
+    "timestamp": {
+      "$ref": "../event-record.schema.json#/$defs/libraryTimestamp"
+    },
+    "role": {
+      "description": "The role that let the work go on: troupe, or the role the open cue was for.",
+      "$ref": "../client/run.schema.json#/$defs/role"
+    }
+  }
+}

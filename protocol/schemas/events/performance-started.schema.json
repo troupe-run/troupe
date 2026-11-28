@@ -41,7 +41,7 @@
       "$ref": "../lineage.schema.json#/$defs/performanceId"
     },
     "performed": {
-      "description": "What was performed. Until flows, always an actor, by its name then.",
+      "description": "What was performed: an actor or a flow, by its name then.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -50,8 +50,11 @@
       ],
       "properties": {
         "kind": {
-          "description": "What kind of thing was performed.",
-          "const": "actor"
+          "description": "What kind of thing was performed: an actor, or a flow of steps.",
+          "enum": [
+            "actor",
+            "flow"
+          ]
         },
         "name": {
           "description": "Its name in config when it was performed.",
@@ -60,10 +63,9 @@
       }
     },
     "steps": {
-      "description": "The performance's steps, in the order they run. Until flows, exactly one.",
+      "description": "The performance's steps, in the order they run: one for an actor, a flow's steps for a flow.",
       "type": "array",
       "minItems": 1,
-      "maxItems": 1,
       "items": {
         "$ref": "#/$defs/step"
       }

@@ -8,10 +8,9 @@ prerelease: true
 A **performance** is one run of your process, through the roles it needs. A **run** is one actor's part in it:
 troupe starts the actor through its runner, records everything it reports, and works out how it ended.
 
-Every `troupe perform` records a performance, and each step of a performance is a run. Today a performance has one
-step: `troupe perform tester` is a performance whose one run is tester's. A performance that takes your process
-through several roles needs [flows](flows.md), and isn't built yet. A **rehearsal** will be the dry-run counterpart
-of a performance, and isn't built yet either.
+Every `troupe perform` records a performance, and each step of a performance is a run. `troupe perform tester` is a
+performance whose one run is tester's. Performing a [flow](flows.md) is a performance with a run for each of its
+steps, one after another. A **rehearsal** will be the dry-run counterpart of a performance, and isn't built yet.
 
 ## A performance
 
@@ -97,6 +96,7 @@ A run is recorded as its own stream of [events](../prompt-book/events.md), all s
   gate, by your approval, or by your accept.
 - **`Run.ChangesDiscarded`:** you discarded the run's changes, and its worktree was removed.
 - **`Run.ChangesRejected`:** you rejected the run's changes at its gate, and its worktree was removed.
+- **`Run.ChangesApproved`:** a [flow](flows.md)'s step before its last was let through its gate, by troupe or by your approval, so its work went on to the next step.
 
 If an event or a notice can't be recorded, troupe stops the run, so the record never has a gap, and still records
 the end if it can, saying where recording stopped and why. The transcript is always kept.

@@ -34,6 +34,7 @@ from troupe.core.runs.backends import Backends
 from troupe.core.runs.changes import (
     SETTLED,
     keep,
+    landing,
     performance_of,
     record_settling,
     settle_lock,
@@ -44,14 +45,14 @@ from troupe.core.runs.projections import RunView, fold_runs
 from troupe.core.workspaces import remove_worktree
 
 
-def reaches_gate(outcome: str | None, changes: dict[str, Any] | None) -> bool:
-    """Whether a run's end takes it through a gate: it succeeded with a captured diff."""
-    return (
-        outcome == "succeeded"
-        and changes is not None
-        and "diff" in changes
-        and "error" not in changes
-    )
+def reaches_gate(outcome: str | None, changes: dict[str, Any] | None, *, last: bool = True) -> bool:
+    """Whether a run's end takes it through a gate: it succeeded with a captured diff. A flow's
+    last step passes it whenever the performance has changes, its own or the steps' before it
+    (spec: flows, "The last step's gate lands the whole flow"); an earlier step only with its
+    own."""
+    if outcome != "succeeded" or changes is None or "error" in changes:
+        return False
+    return "diff" in changes or (last and "sofar" in changes)
 
 
 def brief(
@@ -61,7 +62,7 @@ def brief(
     data: dict[str, Any] = {
         "actor": actor,
         "outcome": outcome,
-        "diff": changes["diff"],
+        "diff": changes["diff"] if "diff" in changes else changes["sofar"],
         "added": changes["added"],
         "modified": changes["modified"],
         "deleted": changes["deleted"],
@@ -173,7 +174,7 @@ def _approve(
     view = view_of(store, request.run)
     changes, role = _answerable(view, view.run_id)
     identity = _holder(store, role)
-    data = backends.artifact_store(session).read(changes["diff"])
+    data = backends.artifact_store(session).read(landing(changes))
     with directory_lock(settle_lock(theatre, view.run_id)):
         view = view_of(store, view.run_id)  # again, inside the lock: another answer may have won
         changes, role = _answerable(view, view.run_id)

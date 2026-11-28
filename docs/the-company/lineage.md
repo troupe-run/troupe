@@ -23,9 +23,11 @@ theatre's history can answer: who did this, through what, when, why, as part of 
 - **`performance`:** the [performance](performances-and-runs.md) the event is part of. Every event of a run, and of
   its performance, names it, whoever recorded it, including an approval or an accept given later. An event that isn't
   part of a performance, such as a config change, has none.
-- **`approvals`:** who approved it, and in which role. Only the event that keeps a run's work at a
-  [gate](gates-and-decisions.md) has one: troupe's own, in role `troupe`, when the changes applied cleanly, or a
-  person's, in role `director`, when they approved it. Every other event's is empty.
+- **`approvals`:** who approved it, and in which role. Only the event that lets a run's work through a
+  [gate](gates-and-decisions.md) has one: keeping the work, or, between a [flow](flows.md)'s steps, letting it go on to
+  the next step (`Run.ChangesApproved`). It's troupe's own, in role `troupe`, when the changes applied cleanly or a
+  flow's step was let through, or a person's, in role `director`, when they approved it. Every other event's is
+  empty.
 - **`vcs`:** the version-control state it was made in: the branch and commit, and for a change made from a file,
   the file and its contents before and after, by hash.
 - **`stage`:** for an event a run recorded, the stage the actor ran on, whether troupe could enforce what it

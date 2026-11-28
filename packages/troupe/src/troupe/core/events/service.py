@@ -170,8 +170,9 @@ class EventStore:
         performance: str | None = None,
     ) -> list[Recorded]:
         """Record ``events`` in reaction to the event ``trigger``: they carry its change id and
-        name it as their cause (design D8). ``approvals`` is filled in only by a gate keeping a
-        run's work (manual-gates design D1); ``performance`` names the performance they belong to
+        name it as their cause (design D8). ``approvals`` is filled in only by a gate letting a
+        run's work through: keeping it, or letting a flow's step go on (manual-gates design D1,
+        actor-sequences design D5); ``performance`` names the performance they belong to
         (performances design D4)."""
         triggered = self.recorder.event(trigger)
         if triggered is None:

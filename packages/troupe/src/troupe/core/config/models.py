@@ -295,6 +295,30 @@ class Runtime(StrictModel):
     """
 
 
+class FlowStep(StrictModel):
+    """
+    One step of a flow.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    actor: Annotated[str, Field(pattern="^[a-z][a-z0-9-]{0,63}$", title="Actor")]
+    """
+    The actor this step runs, by its name in config.
+    """
+    direction: Annotated[str | None, Field(min_length=1, title="Direction")] = None
+    """
+    What this step is asked to do, added after the performance's own direction. Absent: the step is told the performance's direction and the step before's brief only.
+    """
+    approvers: Annotated[list[Literal["troupe", "director"]] | None, Field(title="Approvers")] = (
+        None
+    )
+    """
+    Who may let this step's work through, by the same rules as an actor's approvers. Absent: the actor's approvers, else troupe, then director.
+    """
+
+
 class PathItem(RootModel[str]):
     root: Annotated[str, Field(min_length=1)]
 
@@ -305,7 +329,7 @@ class RenamedFromItem(RootModel[str]):
 
 class ConfigChangedRename(StrictModel):
     """
-    A whole actor or runtime renamed: path is the new name and renamedFrom the old, each [kind, name] of the same kind; before is the hash of the group it moves; there is no after.
+    A whole actor, runtime or flow renamed: path is the new name and renamedFrom the old, each [kind, name] of the same kind; before is the hash of the group it moves; there is no after.
     """
 
     model_config = ConfigDict(
@@ -360,6 +384,27 @@ class ConfigChangedFile(StrictModel):
     hash: Annotated[str | None, Field(pattern="^sha256:[0-9a-f]{64}$", title="Content hash")] = None
     """
     The SHA-256 of the file's bytes as troupe wrote them.
+    """
+
+
+class Flow(StrictModel):
+    """
+    One flow's config file, .troupe/flows/<name>.yaml: actors performed one after another as one performance, each step building on the work before it. The file's name is the flow's name, which no actor may share. troupe writes this file from the theatre's config events, and every field is set with troupe config set.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    field_schema: Annotated[
+        str | None,
+        Field(alias="$schema", pattern="(^|/)config/flow\\.schema\\.json$", title="Schema"),
+    ] = None
+    """
+    Where this file's schema is, so editors can check it. troupe writes it.
+    """
+    steps: Annotated[list[FlowStep], Field(min_length=1, title="Steps")]
+    """
+    The flow's steps, in the order they run. Each names an actor config defines that works in its own worktree. The same actor may appear more than once.
     """
 
 

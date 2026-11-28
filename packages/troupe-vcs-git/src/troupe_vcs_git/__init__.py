@@ -519,6 +519,9 @@ class GitAdapter:
     def apply(self, diff: Path) -> tuple[str, ...]:
         return self._worktrees.apply(diff)
 
+    def apply_in_worktree(self, path: Path, diff: Path) -> str:
+        return self._worktrees.apply_in_worktree(path, diff)
+
     def remove_worktree(self, path: Path) -> None:
         self._worktrees.remove_worktree(path)
 

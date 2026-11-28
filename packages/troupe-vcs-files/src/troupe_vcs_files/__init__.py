@@ -96,6 +96,9 @@ class FilesAdapter:
     def apply(self, diff: Path) -> tuple[str, ...]:
         self._unsupported()
 
+    def apply_in_worktree(self, path: Path, diff: Path) -> str:
+        self._unsupported()
+
     def remove_worktree(self, path: Path) -> None:
         self._unsupported()
 

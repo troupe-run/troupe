@@ -550,3 +550,14 @@ def test_config_mv_resolving_a_rename_against_a_rename_and_removal_keeps_the_act
     resolved = merge(records, extra=Change("proposed", "", {}, "", tuple(resolution), ()))
     assert resolved.conflicts == ()
     assert resolved.config["actors"]["x1"] == TESTER
+
+
+def test_a_flow_on_one_line_and_its_actor_removed_on_another_conflict_on_both() -> None:
+    # spec: flows, "A flow's steps must be performable": a merge that leaves a step naming a
+    # missing actor is a conflict, spanning the flow and the actor.
+    flow: list[tuple[Any, object]] = [(("flows", "review"), {"steps": [{"actor": "tester"}]})]
+    removed: list[tuple[Any, object]] = [(("actors", "tester"), UNSET)]
+    merged = _in_every_order(_two_lines([flow], [removed]))
+    [conflict] = merged.conflicts
+    assert conflict.paths == (("flows", "review"),)
+    assert len(conflict.changes) == 2  # the flow's line and the removal's line

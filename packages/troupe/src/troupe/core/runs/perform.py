@@ -26,29 +26,27 @@ import contextlib
 import functools
 import hashlib
 import os
-import threading
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal
+from typing import Any
 from uuid import UUID, uuid4
 
-from troupe.core import defaults, gates, runtimes
+from troupe.core import defaults, runtimes
 from troupe.core.artifacts import ArtifactStore
 from troupe.core.client import messages as m
 from troupe.core.client.dispatch import Send
 from troupe.core.client.session import Session
 from troupe.core.config.kinds import check_actor
 from troupe.core.config.merge import Merged
-from troupe.core.config_paths import shown
 from troupe.core.errors import TroupeError
 from troupe.core.events import Command, EventStore
+from troupe.core.events.lineage import Actor
 from troupe.core.files import directory_lock, replace_file
 from troupe.core.identity import Identity
 from troupe.core.interim import runner_command, runner_environment
-from troupe.core.masking import Masker
 from troupe.core.notices import Notice
-from troupe.core.policy import PolicyCompaction, env_name, read_policy
+from troupe.core.policy import read_policy
 from troupe.core.runners.effects import (
     DeclaredEffects,
     EffectCheck,
@@ -59,23 +57,45 @@ from troupe.core.runners.host import RunnerCommand, RunRequest, not_started, run
 from troupe.core.runners.limits import RunLimits
 from troupe.core.runners.outcome import RunOutcome
 from troupe.core.runs import gate
-from troupe.core.runs.aggregate import Run
 from troupe.core.runs.backends import PERFORM_PID_FILE
 from troupe.core.runs.backends import Backends as Backends
 from troupe.core.runs.backends import lease_dir as lease_dir
-from troupe.core.runs.performance import Performance, outcome_of
-from troupe.core.runs.projections import fold_runs
+from troupe.core.runs.briefs import (
+    Earlier,
+    changed_files,
+    direction_for,
+    final_message,
+    history_files,
+)
+from troupe.core.runs.changes import landing
+from troupe.core.runs.performance import Performance
+from troupe.core.runs.plan import ContextFull as ContextFull
+from troupe.core.runs.plan import (
+    PerformanceStart,
+    Performed,
+    plan_steps,
+)
+from troupe.core.runs.plan import _from_config as _from_config
+from troupe.core.runs.plan import _rehearsed_approvers as _rehearsed_approvers
+from troupe.core.runs.plan import _StepPlan as _StepPlan
+from troupe.core.runs.plan import _What as _What
+from troupe.core.runs.plan import resolve_context_full as resolve_context_full
+from troupe.core.runs.projections import RunView, fold_runs
 from troupe.core.runs.queries import refuse_runs_before_performances
+from troupe.core.runs.recording import _as_troupe_error as _as_troupe_error
+from troupe.core.runs.recording import _Failure
+from troupe.core.runs.recording import _Recorder as _Recorder
 from troupe.core.runtimes import RunRuntime
 from troupe.core.stages import load_stage
 from troupe.core.vcs import SharedState, Vcs
 from troupe.core.workspaces import (
-    Kind,
     Planned,
     Worktree,
+    build_on,
     capture,
     make_worktree,
     plan_worktree,
+    remove_worktree,
     shared_changed,
     snapshot,
     worktree_base,
@@ -133,456 +153,11 @@ def refuse_scratch_in_theatre(root: Path, theatre: Path) -> Path:
     return resolved
 
 
-def _as_troupe_error(error: BaseException) -> TroupeError:
-    if isinstance(error, TroupeError):
-        return error
-    return TroupeError(
-        "internal.unexpected",
-        problem=f"troupe hit an unexpected error: {type(error).__name__}: {error}",
-        fix="This is a bug in troupe. Please report it at https://github.com/troupe-run/troupe/issues",
-    )
-
-
-@dataclass(frozen=True)
-class _What:
-    """What a perform runs, as config defines the actor (config-model design D14)."""
-
-    actor: str
-    runner: str
-    options: dict[str, object]
-    effect_check: m.EffectCheck
-    character: str | None
-    config: tuple[str, ...]
-    workspace: Kind
-    effects: p.EffectsDeclaration = p.READ_ONLY_DECLARATION
-    runtime: str | None = None
-    model: str | None = None
-    on_context_full: str | None = None
-    """The actor's own onContextFull; None when it doesn't set one."""
-    approvers: tuple[str, ...] | None = None
-    """The actor's own approvers; None when it doesn't set any."""
-
-    def resolved_approvers(self) -> gates.Approvers | None:
-        """The approvers its runs' gate tries: None for a run in the theatre, which has none."""
-        if self.workspace != "worktree":
-            return None
-        return gates.resolve(self.approvers)
-
-
-@dataclass(frozen=True)
-class ContextFull:
-    """A run's onContextFull as perform resolved it, and where it came from (compaction-opt-in
-    design D2, D3)."""
-
-    value: p.OnContextFull
-    source: Literal["default", "actor", "policy"]
-
-    def to_data(self) -> dict[str, str]:
-        return {"value": self.value, "source": self.source}
-
-
-def resolve_context_full(actor: str, own: str | None, policy: PolicyCompaction) -> ContextFull:
-    """The run's onContextFull from the actor's own value and the compaction policy: under actors,
-    the actor's value, fail when it has none; under all, compact unless the actor says fail; under
-    none, fail, and an actor that asks for compact is refused with policy.compaction-forbidden."""
-    if own == "compact" and policy.value == "none":
-        variable = env_name(policy.setting)
-        raise TroupeError(
-            "policy.compaction-forbidden",
-            problem=f"The actor {actor} asks to compact when its context fills "
-            f"(onContextFull: compact), and policy forbids compaction ({variable}=none).",
-            fix=f"Set the actor's onContextFull to fail (troupe config set "
-            f"{shown(('actors', actor, 'onContextFull'))}=fail), or change {variable}.",
-            details={"actor": actor, "variable": variable},
-        )
-    if own == "compact":
-        return ContextFull("compact", "actor")
-    if own == "fail":
-        return ContextFull("fail", "actor")
-    if policy.value == "all":
-        return ContextFull("compact", "policy")
-    if policy.value == "none":
-        return ContextFull("fail", "policy")
-    return ContextFull("fail", "default")
-
-
-def _from_config(merged: Merged, name: str) -> _What:
-    """The actor ``name`` as config defines it. Refused when config has no such actor."""
-    actors = merged.config.get("actors", {})
-    actor = actors.get(name) if isinstance(actors, dict) else None
-    if not isinstance(actor, dict):
-        known = sorted(actors) if isinstance(actors, dict) else []
-        listed = ", ".join(known) or "none yet"
-        renamed = merged.names.renamed_to("actors", name) if merged.names is not None else None
-        details: dict[str, object] = {"actor": name, "known": known}
-        if renamed is not None:
-            details["renamedTo"] = renamed
-            fix = f"{name} was renamed {renamed}: troupe perform {renamed}."
-        else:
-            fix = (
-                f"Perform one of the actors config has, or define {name} with troupe config "
-                f"set {shown(('actors', name, 'runner'))}=... "
-                f"{shown(('actors', name, 'expect'))}=..."
-            )
-        raise TroupeError(
-            "config.unknown-actor",
-            problem=f"Config has no actor named {name!r} (it has: {listed}).",
-            fix=fix,
-            details=details,
-        )
-    paths = list(dict.fromkeys(actor["expect"]))
-    check: m.EffectCheck = m.FilesEffectCheck(paths=paths) if paths else m.NoEffectCheck()
-    character = actor.get("character")
-    workspace = actor.get("workspace", defaults.WORKSPACE)
-    declared = actor.get("effects") or {}
-    effects = p.EffectsDeclaration(
-        write=list(declared.get("write") or []),
-        delete=list(declared.get("delete") or []),
-        move=list(declared.get("move") or []),
-    )
-    return _What(
-        actor=name,
-        runner=str(actor["runner"]),
-        options=dict(actor.get("options", {})),
-        effect_check=check,
-        character=character if isinstance(character, str) else None,
-        config=merged.heads,
-        workspace="theatre" if workspace == "theatre" else "worktree",
-        effects=effects,
-        runtime=actor.get("runtime"),
-        model=actor.get("model"),
-        on_context_full=actor.get("onContextFull"),
-        approvers=tuple(actor["approvers"]) if "approvers" in actor else None,
-    )
-
-
-def _approvers_data(what: _What) -> dict[str, object] | None:
-    resolved = what.resolved_approvers()
-    return resolved.to_data() if resolved is not None else None
-
-
-def _rehearsed_approvers(what: _What) -> m.ApproversData | None:
-    data = _approvers_data(what)
-    return m.ApproversData.from_data(data) if data is not None else None
-
-
 def _summary(text: str | None) -> m.TextSummary | None:
     if not text:
         return None
     digest = "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
     return m.TextSummary(hash=digest, length=len(text))
-
-
-@dataclass(frozen=True)
-class _Failure:
-    """What wasn't recorded first, and why: a run event by its seq, or a notice by its code."""
-
-    error: TroupeError
-    seq: int | None = None
-    notice: str | None = None
-
-    def to_data(self) -> dict[str, Any]:
-        """The run's end's ``recording``: exactly one of failedAt and notice, and the error."""
-        named: dict[str, Any] = (
-            {"failedAt": self.seq} if self.seq is not None else {"notice": self.notice}
-        )
-        return {**named, "error": self.error.to_data()}
-
-
-@dataclass
-class _Entry:
-    """One thing to record, in the order it reached the recorder: a run event or a notice."""
-
-    event: p.RunEvent | None = None
-    notice: dict[str, Any] | None = None
-    clones: tuple[str, ...] | None = None
-    """The clone mechanisms of a worktree run's made worktree."""
-    done: "asyncio.Future[str | None] | None" = None
-
-
-def _settle(entry: _Entry, at: str | None, error: BaseException | None = None) -> None:
-    """Tell ``entry``'s waiter how its recording went, unless nobody is waiting any more: a waiter
-    that was cancelled (say, by the run host's start timeout) cancels its future, and setting it
-    then would raise and end the writer, with every entry after it left unrecorded."""
-    if entry.done is None or entry.done.done():
-        return
-    if error is not None:
-        entry.done.set_exception(error)
-    else:
-        entry.done.set_result(at)
-
-
-_DRAIN = _Entry()
-"""Tells the writer every entry before it is recorded, so the end can follow."""
-
-
-class _Recorder:
-    """Records one run's events and notices, in the order they arrive, and its end.
-
-    One writer task records every run event and notice through a worker thread, one at a time,
-    in the order they reached its queue (run-notices-in-history design D3). A notice can arrive
-    from the event loop or from another thread (a workspace operation's timer), and is sent live at
-    once, masked; it is queued before the start is recorded too, and the writer starts once the
-    start is. A run event's caller waits for it to be recorded; a notice's doesn't. The end waits
-    for the queue to empty first.
-    """
-
-    def __init__(
-        self,
-        performance_id: str,
-        run_id: str,
-        what: "_What",
-        store: EventStore,
-        person: Command,
-        agent: Command,
-        admission: dict[str, Any],
-        direction_ref: str,
-        send: Send,
-        cancel: asyncio.Event,
-        context_full: ContextFull,
-        runtime: RunRuntime | None = None,
-    ) -> None:
-        self.performance_id = performance_id
-        self.run_id = run_id
-        self.what = what
-        self.runtime = runtime
-        self.context_full = context_full
-        self.store = store
-        self.stale = False
-        self.person = person
-        self.agent = agent
-        self.admission = admission
-        self.direction_ref = direction_ref
-        self.workspace: dict[str, Any] = {"kind": "theatre"}
-        self.send = send
-        self.cancel = cancel
-        self.mask = Masker(runtime.value if runtime is not None else None)
-        self.loop = asyncio.get_running_loop()
-        self.loop_thread = threading.get_ident()
-        self.queue: asyncio.Queue[_Entry] = asyncio.Queue()
-        self.writer: asyncio.Task[None] | None = None
-        self.run: Run | None = None
-        self.performance: Performance | None = None
-        self.failure: _Failure | None = None
-
-    def _start(self) -> None:
-        approvers = _approvers_data(self.what)
-        step: dict[str, Any] = {"actor": self.what.actor}
-        if approvers is not None:
-            step["approvers"] = approvers
-        performance = Performance(
-            performance_id=self.performance_id,
-            performed={"kind": "actor", "name": self.what.actor},
-            steps=[step],
-            direction=self.direction_ref,
-            config=list(self.what.config),
-        )
-        run = Run(
-            run_id=self.run_id,
-            actor=self.what.actor,
-            runner_requested=self.what.runner,
-            stage=self.admission,
-            effect_check=self.what.effect_check.to_data(),
-            direction=self.direction_ref,
-            config=list(self.what.config),
-            workspace=self.workspace,
-            on_context_full=self.context_full.to_data(),
-            step=1,
-            runtime=self.runtime.to_data() if self.runtime is not None else None,
-            approvers=approvers,
-        )
-        # The config version must still be here as the start is written: a person's drop of an
-        # abandoned edit between this perform's sync and now refuses the start, never leaving a
-        # run naming events that are gone (abandoned-edits design D4). The performance's start is
-        # in the same batch, so neither is recorded without the other (performances design D2).
-        self.person.record(
-            [*performance.collect_events(), *run.collect_events()],
-            requires=list(self.what.config),
-        )
-        self.performance = performance
-        self.run = run
-
-    async def start(self, workspace: dict[str, Any]) -> None:
-        """Record the run's start, in ``workspace``, before its workspace is made and its runner
-        starts; then start recording what's queued, notices raised before the start first."""
-        self.workspace = workspace
-        await asyncio.to_thread(self._start)
-        self.writer = asyncio.create_task(self._write())
-
-    def _made(self, clones: tuple[str, ...]) -> None:
-        run = self._run()
-        run.made_worktree(list(clones))
-        self.person.record(run.collect_events())
-
-    async def made(self, worktree: Worktree) -> None:
-        """Record that the run's worktree is made, with its clone mechanisms, after every notice
-        raised before it. A failure to record it raises, as before: the run can't start. Once
-        something else failed to record, it isn't recorded, and the run is already cancelled."""
-        done: asyncio.Future[str | None] = self.loop.create_future()
-        self.queue.put_nowait(_Entry(clones=worktree.clones, done=done))
-        await done
-
-    def _run(self) -> Run:
-        if self.run is None:
-            raise RuntimeError(f"run {self.run_id}'s start isn't recorded")
-        return self.run
-
-    # Notices
-
-    def notice(self, notice: Notice) -> None:
-        """Send ``notice`` live, masked, and queue it for recording. Safe from any thread."""
-        data = self.mask.data(notice.to_data())
-        if not isinstance(data, dict):
-            raise TypeError("a masked notice is still a JSON object")
-        self.send(m.NoticeUpdate(notice=m.NoticeData.from_data(data)))
-        if threading.get_ident() == self.loop_thread:
-            self.queue.put_nowait(_Entry(notice=data))
-        else:
-            with contextlib.suppress(RuntimeError):  # the loop has closed: perform has returned
-                self.loop.call_soon_threadsafe(self.queue.put_nowait, _Entry(notice=data))
-
-    def _note(self, notice: dict[str, Any]) -> None:
-        run = self._run()
-        run.notice(notice)
-        self.person.record(run.collect_events())
-
-    # Run events
-
-    def _record(self, event: p.RunEvent) -> str:
-        run = self._run()
-        run.report(event.seq, event.to_data())
-        [recorded] = self.agent.record(run.collect_events())
-        return recorded.at
-
-    async def on_event(self, event: p.RunEvent) -> None:
-        if self.failure is not None:
-            return
-        done: asyncio.Future[str | None] = self.loop.create_future()
-        self.queue.put_nowait(_Entry(event=event, done=done))
-        at = await done
-        if at is None:
-            return
-        self.send(
-            m.LoggedEvent.from_data(
-                {
-                    "kind": "event",
-                    "runId": self.run_id,
-                    "seq": event.seq,
-                    "at": at,
-                    "event": event.to_data(),
-                }
-            )
-        )
-
-    # The writer
-
-    async def _write(self) -> None:
-        """Record each queued entry in turn, until told to drain. Once a run event or a notice
-        fails to record, nothing more is: a gap would break the seq rule, and the history would
-        read as whole."""
-        while (entry := await self.queue.get()) is not _DRAIN:
-            if entry.clones is not None:
-                await self._write_made(entry)
-                continue
-            at: str | None = None
-            if self.failure is None:
-                try:
-                    if entry.event is not None:
-                        at = await asyncio.to_thread(self._record, entry.event)
-                    elif entry.notice is not None:
-                        await asyncio.to_thread(self._note, entry.notice)
-                except Exception as error:  # any failure to record stops the run
-                    # The aggregate may have counted what wasn't recorded; the end reloads it.
-                    self.stale = True
-                    self.failure = _Failure(
-                        _as_troupe_error(error),
-                        seq=entry.event.seq if entry.event is not None else None,
-                        notice=str(entry.notice["code"]) if entry.notice is not None else None,
-                    )
-                    self.cancel.set()
-            _settle(entry, at)
-
-    async def _write_made(self, entry: _Entry) -> None:
-        if entry.done is None or entry.clones is None:
-            raise TypeError("a worktree's made entry has clones and a waiter")
-        if self.failure is not None:
-            _settle(entry, None)
-            return
-        try:
-            await asyncio.to_thread(self._made, entry.clones)
-        except Exception as error:
-            # The aggregate may have counted what wasn't recorded; the end reloads it (_end).
-            self.stale = True
-            _settle(entry, None, error)
-            return
-        _settle(entry, None)
-
-    async def _drain(self) -> None:
-        """Wait until every entry queued so far is recorded, or dropped after a failure."""
-        if self.writer is None:
-            return
-        self.queue.put_nowait(_DRAIN)
-        await self.writer
-        self.writer = None
-
-    def stop(self) -> None:
-        """Stop the writer if perform is leaving without an end (it failed part-way)."""
-        if self.writer is not None:
-            self.writer.cancel()
-            self.writer = None
-
-    # The end
-
-    def _end(self, outcome: dict[str, Any], changes: dict[str, Any] | None) -> None:
-        if self.stale:
-            loaded = self.store.load(UUID(self.run_id))
-            if not isinstance(loaded, Run):
-                raise TypeError(f"run {self.run_id}'s stream doesn't hold a run")
-            self.run = loaded
-        run = self._run()
-        recording = self.failure.to_data() if self.failure is not None else None
-        run.end(outcome, recording, changes)
-        ended = run.collect_events()
-        approvers = self.what.resolved_approvers()
-        gated = (
-            approvers is not None
-            and changes is not None
-            and gate.reaches_gate(outcome.get("outcome"), changes)
-        )
-        if not gated:
-            # No gate follows, so nothing more will happen in the performance: it ends with the
-            # run, in the same batch (performances design D3).
-            performance = self._performance()
-            performance.end(outcome_of(outcome.get("outcome"), changes))
-            over = performance.collect_events()
-            self.store.record_with_lineages(
-                [*ended, *over],
-                [self.agent.lineage()] * len(ended) + [self.person.lineage()] * len(over),
-            )
-            return
-        if approvers is None or changes is None or not gate.first_is_a_person(approvers.value):
-            # troupe goes first, after the end: it keeps the work, ending the performance, or
-            # passes the gate to a person (troupes_step).
-            self.agent.record(ended)
-            return
-        # A person first: the cue is recorded with the end, so no perform that stops after the
-        # end leaves the run unasked (manual-gates design D3).
-        run.raise_cue(approvers.value[0], gate.brief(self.what.actor, "succeeded", changes))
-        cue = run.collect_events()
-        troupe = gate.troupe_command(self.store, self.person)
-        self.store.record_with_lineages(
-            [*ended, *cue], [self.agent.lineage()] * len(ended) + [troupe.lineage()] * len(cue)
-        )
-
-    def _performance(self) -> Performance:
-        if self.performance is None:
-            raise RuntimeError(f"performance {self.performance_id}'s start isn't recorded")
-        return self.performance
-
-    async def end(self, outcome: dict[str, Any], changes: dict[str, Any] | None) -> None:
-        """Record the run's end, once every run event and notice raised before it is recorded."""
-        await self._drain()
-        await asyncio.to_thread(self._end, outcome, changes)
 
 
 def _pid_file() -> bytes:
@@ -597,18 +172,47 @@ def _ignore(_: object) -> None:
     """Drops an update: the rehearsed sync before the real one reports nothing."""
 
 
+@dataclass(frozen=True)
+class _Prepared:
+    """What every step of one perform shares: who is acting, the stage and what admitted it, the
+    store, and where runs' scratch directories go."""
+
+    session: Session
+    send: Send
+    backends: Backends
+    store: EventStore
+    person: Actor
+    stage: Any
+    admission: Any
+    policy: Any
+    scratch_root: Path
+
+
+@dataclass(frozen=True)
+class _Ready:
+    """A step resolved for running: its plan, the runner's command, its context policy and its
+    runtime as they resolved (everything that can refuse it has passed)."""
+
+    step: _StepPlan
+    argv: list[str]
+    context_full: ContextFull
+    runtime: RunRuntime | None
+
+
 async def perform(
     request: m.PerformRequest, session: Session, send: Send, *, backends: Backends | None = None
 ) -> m.PerformResult:
     """Run the actor ``request`` names and record the run; the result is the recorded run."""
     backends = backends or Backends()
-    theatre = session.theatre
     store = await asyncio.to_thread(backends.event_store, session)
     person_identity = await asyncio.to_thread(store.identify)
     stage = load_stage(defaults.STAGE)
     policy = read_policy(session.env)
     admission = stage.admit(policy)
-    scratch_root = refuse_scratch_in_theatre(defaults.run_scratch_root(), theatre)
+    scratch_root = refuse_scratch_in_theatre(defaults.run_scratch_root(), session.theatre)
+    prepared = _Prepared(
+        session, send, backends, store, person_identity, stage, admission, policy, scratch_root
+    )
     # Imported here, so the queries and changes that share this module don't load config's
     # handlers (cli-starts-fast design D5). The sync sweeps hand edits into config first, and makes
     # the files what config says: a rehearsal does every check and records and writes nothing
@@ -621,53 +225,195 @@ async def perform(
     synced = await asyncio.to_thread(
         functools.partial(sync_files, session, store, quiet, rehearse=True)
     )
-    merged = synced.merged
-    what = _from_config(merged, request.actor)
-    argv = runner_command(what.runner)
-    check_actor(what.actor, merged.config)
-    context_full = resolve_context_full(what.actor, what.on_context_full, policy.compaction)
-    runtime = (
-        runtimes.for_run(
-            what.runtime, what.actor, what.model, merged.config, session.env, runner=what.runner
-        )
-        if what.runtime is not None
-        else None
-    )
+    rehearsed, planned = plan_steps(synced.merged, request.actor)
+    steps = [_ready(prepared, step, synced.merged) for step in planned]
     direction = request.direction or ""
-    vcs = store.vcs
     base: tuple[str, str] | None = None
-    if what.workspace == "worktree":
-        base = await asyncio.to_thread(worktree_base, vcs, what.actor)
+    if any(ready.step.what.workspace == "worktree" for ready in steps):
+        base = await asyncio.to_thread(worktree_base, store.vcs, steps[0].step.what.actor)
     # A theatre holding runs from before performances is refused here, before anything runs or is
     # recorded, rather than at troupe's turn at the gate, after the work (performances design D8).
     await asyncio.to_thread(refuse_runs_before_performances, store)
     if request.rehearse:
-        return m.PerformResult(
-            rehearsal=m.Rehearsal(
-                actor=what.actor,
-                runner=what.runner,
-                stage=m.StageData.from_data(admission.to_data()),
-                effect_check=what.effect_check,
-                effects=what.effects,
-                config=list(what.config),
-                character=_summary(what.character),
-                direction=_summary(direction),
-                workspace=m.RehearsedWorkspace(
-                    kind=what.workspace, base=base[0] if base is not None else None
-                ),
-                runtime=(
-                    m.ResolvedRuntime.from_data(runtime.to_data()) if runtime is not None else None
-                ),
-                approvers=_rehearsed_approvers(what),
-            )
-        )
+        return m.PerformResult(rehearsal=_rehearsed(prepared, rehearsed, steps, direction, base))
     # Now for real, just before the run: hand edits recorded, files written. The run uses the
     # config this leaves, and records its version.
     synced = await asyncio.to_thread(functools.partial(sync_files, session, store, send))
-    merged = synced.merged
-    what = _from_config(merged, request.actor)
-
+    performed, planned = plan_steps(synced.merged, request.actor)
+    steps = [_ready(prepared, step, synced.merged) for step in planned]
     performance_id = str(uuid4())
+    start = PerformanceStart(performance_id, performed, [ready.step.recorded() for ready in steps])
+    summary = await _drive(prepared, steps, performance_id, direction, base, start=start)
+    return m.PerformResult(run=summary)
+
+
+@dataclass(frozen=True)
+class _BuiltOn:
+    """What a flow's later step is built on: the run of the step before, and the performance's
+    diff so far, None when nothing has changed yet (actor-sequences design D3)."""
+
+    run_id: str
+    patch: str | None
+
+
+async def _drive(
+    prepared: _Prepared,
+    steps: list[_Ready],
+    performance_id: str,
+    direction: str,
+    base: tuple[str, str] | None,
+    *,
+    start: PerformanceStart | None = None,
+    earlier: list[Earlier] | None = None,
+    built_on: _BuiltOn | None = None,
+) -> m.RunSummary:
+    """Run ``steps`` in order, each built on the one before, until the last step's gate, a gate
+    that waits, or a step that doesn't succeed; the last run's summary. ``earlier`` are the steps
+    that ran before ``steps[0]``, when approve carries a waiting flow on (actor-sequences design
+    D2, D7)."""
+    store, artifacts = prepared.store, prepared.backends.artifact_store(prepared.session)
+    done: list[Earlier] = list(earlier or [])
+    summary: m.RunSummary | None = None
+    for ready in steps:
+        performance = None
+        if not ready.step.position.first:
+            loaded = await asyncio.to_thread(store.load, UUID(performance_id))
+            performance = loaded if isinstance(loaded, Performance) else None
+        told = direction_for(direction, ready.step.own_direction, done)
+        view = await _run_step(
+            prepared,
+            ready,
+            performance_id,
+            told,
+            base,
+            start=start if ready.step.position.first else None,
+            performance=performance,
+            built_on=built_on,
+            history=history_files(done),
+        )
+        summary = view.summary("ended")
+        changes = summary.changes.to_data() if summary.changes is not None else {}
+        goes_on = summary.outcome == "succeeded" and changes.get("state") in ("approved", "none")
+        if ready.step.position.last or not goes_on:
+            return summary
+        done.append(await asyncio.to_thread(_earlier, store, artifacts, ready, view))
+        work = changes.get("sofar") or changes.get("diff") or (built_on.patch if built_on else None)
+        built_on = _BuiltOn(view.run_id, work)
+    if summary is None:
+        raise RuntimeError("a performance has at least one step")
+    return summary
+
+
+def _earlier(store: EventStore, artifacts: ArtifactStore, ready: _Ready, view: RunView) -> Earlier:
+    """The step that just ran, as later steps are told about it and read its history."""
+    [logged] = fold_runs(store.history(UUID(view.run_id)), keep_log=True).values()
+    changes = view.changes() or {}
+    diff = artifacts.read(changes["diff"]) if "diff" in changes else None
+    outcome = ((view.ended or {}).get("outcome") or {}).get("outcome", "ended")
+    return Earlier(
+        ready.step.position.index,
+        ready.step.what.actor,
+        str(outcome),
+        changed_files(diff),
+        final_message(view.ended),
+        diff,
+        tuple(logged.log),
+    )
+
+
+def _ready(prepared: _Prepared, step: _StepPlan, merged: Merged) -> _Ready:
+    """``step`` with every check that can refuse it made: its actor's config, its runner, its
+    context policy and its runtime."""
+    what = step.what
+    argv = runner_command(what.runner)
+    check_actor(what.actor, merged.config)
+    context_full = resolve_context_full(
+        what.actor, what.on_context_full, prepared.policy.compaction
+    )
+    runtime = (
+        runtimes.for_run(
+            what.runtime,
+            what.actor,
+            what.model,
+            merged.config,
+            prepared.session.env,
+            runner=what.runner,
+        )
+        if what.runtime is not None
+        else None
+    )
+    return _Ready(step, list(argv), context_full, runtime)
+
+
+def _rehearsed(
+    prepared: _Prepared,
+    performed: Performed,
+    steps: list[_Ready],
+    direction: str,
+    base: tuple[str, str] | None,
+) -> m.Rehearsal:
+    """What performing would run: an actor's one run, or a flow's first step with every step
+    beside it, each told the flow's direction and its own (earlier steps' briefs are added only
+    when it runs, from what they did)."""
+    if performed.kind == "actor":
+        return _rehearsal(prepared, steps[0], direction, base)
+    each = [
+        _rehearsal(prepared, ready, direction_for(direction, ready.step.own_direction, []), base)
+        for ready in steps
+    ]
+    return replace(each[0], flow=performed.name, steps=each)
+
+
+def _rehearsal(
+    prepared: _Prepared, ready: _Ready, direction: str, base: tuple[str, str] | None
+) -> m.Rehearsal:
+    what, runtime = ready.step.what, ready.runtime
+    return m.Rehearsal(
+        actor=what.actor,
+        runner=what.runner,
+        stage=m.StageData.from_data(prepared.admission.to_data()),
+        effect_check=what.effect_check,
+        effects=what.effects,
+        config=list(what.config),
+        character=_summary(what.character),
+        direction=_summary(direction),
+        workspace=m.RehearsedWorkspace(
+            kind=what.workspace,
+            base=base[0] if base is not None and what.workspace == "worktree" else None,
+        ),
+        runtime=m.ResolvedRuntime.from_data(runtime.to_data()) if runtime is not None else None,
+        approvers=_rehearsed_approvers(ready.step),
+    )
+
+
+async def _run_step(
+    prepared: _Prepared,
+    ready: _Ready,
+    performance_id: str,
+    direction: str,
+    base: tuple[str, str] | None,
+    *,
+    start: PerformanceStart | None = None,
+    performance: Performance | None = None,
+    built_on: _BuiltOn | None = None,
+    history: dict[str, bytes] | None = None,
+) -> RunView:
+    """Run one step of a performance as a run, from its lease to its gate, and return the run as
+    recorded. The first step's start records the performance's (``start``); a later one is given
+    the ``performance`` it's a step of."""
+    session, store, backends, send = (
+        prepared.session,
+        prepared.store,
+        prepared.backends,
+        prepared.send,
+    )
+    theatre, vcs, stage = session.theatre, store.vcs, prepared.stage
+    step, what, runtime, context_full = (
+        ready.step,
+        ready.step.what,
+        ready.runtime,
+        ready.context_full,
+    )
     run_id = str(uuid4())
     lease = lease_dir(theatre, run_id)
     lease.mkdir(parents=True)
@@ -677,7 +423,7 @@ async def perform(
         artifacts = backends.artifact_store(session)
         direction_ref = await asyncio.to_thread(artifacts.put, direction.encode("utf-8"))
         person = store.command(
-            via="cli", actor=person_identity, stage=admission, performance=performance_id
+            via="cli", actor=prepared.person, stage=prepared.admission, performance=performance_id
         )
         agent = person.acting_as(
             Identity(kind="agent", id=what.actor, source="troupe"), via="runner"
@@ -692,35 +438,43 @@ async def perform(
             store,
             person,
             agent,
-            admission.to_data(),
+            prepared.admission.to_data(),
             direction_ref,
             send,
             cancel,
             context_full,
             runtime,
+            step=step,
+            start=start,
+            performance=performance,
         )
         try:
             announce = recorder.notice
             planned: Planned | None = None
-            if base is not None:
+            if base is not None and what.workspace == "worktree":
                 planned = await asyncio.to_thread(
                     plan_worktree, vcs, theatre, run_id, base[0], base[1], announce
                 )
             recorded_workspace = (
-                planned.record(theatre) if planned is not None else {"kind": "theatre"}
+                planned.record(theatre, built_on=built_on.run_id if built_on else None)
+                if planned is not None
+                else {"kind": "theatre"}
             )
             await recorder.start(recorded_workspace)
-            send(
-                m.PerformanceStarted(
-                    performance_id=performance_id,
-                    performed=m.Performed(kind="actor", name=what.actor),
+            if start is not None:
+                send(
+                    m.PerformanceStarted(
+                        performance_id=performance_id,
+                        performed=m.Performed(kind=start.performed.kind, name=start.performed.name),
+                        steps=step.position.total,
+                    )
                 )
-            )
             send(
                 m.Started(
                     run_id=run_id,
                     performance_id=performance_id,
-                    step=1,
+                    step=step.position.index,
+                    actor=what.actor,
                     worktree=recorded_workspace["path"] if planned is not None else None,
                 )
             )
@@ -729,6 +483,9 @@ async def perform(
             try:
                 if planned is not None:
                     worktree = await asyncio.to_thread(make_worktree, vcs, planned, announce)
+                    worktree = await asyncio.to_thread(
+                        _build, prepared, worktree, built_on, history or {}, announce
+                    )
                     await recorder.made(worktree)
                     shared_before = await asyncio.to_thread(snapshot, vcs, announce)
             except Exception as error:
@@ -740,7 +497,7 @@ async def perform(
                 # After the table's variables, so one already in perform's environment never passes.
                 environment[CREDENTIAL_VARIABLE] = runtime.value
             outcome = await run_actor(
-                RunnerCommand(list(argv), cwd=workspace, env=environment),
+                RunnerCommand(list(ready.argv), cwd=workspace, env=environment),
                 RunRequest(
                     run_id,
                     direction,
@@ -759,13 +516,16 @@ async def perform(
                 store=artifacts,
                 effect=expected_files_for(what, workspace),
                 audit=audit_for(
-                    what, workspace, vcs, worktree.baseline if worktree is not None else None
+                    what,
+                    workspace,
+                    vcs,
+                    (worktree.own_baseline or worktree.baseline) if worktree is not None else None,
                 ),
                 limits=backends.limits,
                 on_event=recorder.on_event,
                 on_announce=announce,
                 cancel=cancel,
-                scratch_root=scratch_root,
+                scratch_root=prepared.scratch_root,
             )
             data = outcome.to_data()
             del data["runId"]
@@ -783,7 +543,7 @@ async def perform(
             if recorder.failure is not None:
                 raise _recording_failed(run_id, recorder.failure, outcome, ended=None)
             await _troupes_turn(
-                what,
+                step,
                 str(data.get("outcome")),
                 changes,
                 artifacts,
@@ -793,15 +553,45 @@ async def perform(
                 person,
                 announce,
             )
-            history = await asyncio.to_thread(store.history, UUID(run_id))
+            recorded = await asyncio.to_thread(store.history, UUID(run_id))
         finally:
             recorder.stop()
-    [view] = fold_runs(history).values()
-    return m.PerformResult(run=view.summary("ended"))
+    [view] = fold_runs(recorded).values()
+    return view
+
+
+def _build(
+    prepared: _Prepared,
+    worktree: Worktree,
+    built_on: _BuiltOn | None,
+    history: dict[str, bytes],
+    announce: Callable[[Notice], None],
+) -> Worktree:
+    """A flow's later step's worktree: the performance's diff so far applied inside it, the step
+    before's worktree removed (its work lives on here), and the earlier steps' history written
+    where the step can read it (actor-sequences design D3, D5, D6)."""
+    if built_on is None:
+        return worktree
+    vcs = prepared.store.vcs
+    if built_on.patch is not None:
+        patch = worktree.path.parent / f"{worktree.path.name}.sofar.diff"
+        artifacts = prepared.backends.artifact_store(prepared.session)
+        patch.write_bytes(artifacts.read(built_on.patch))
+        try:
+            worktree = build_on(vcs, worktree, patch, announce)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                patch.unlink()
+    for path, data in history.items():
+        target = worktree.cwd.joinpath(*path.split("/"))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    remove_worktree(vcs, prepared.session.theatre, built_on.run_id, announce)
+    return worktree
 
 
 async def _troupes_turn(
-    what: _What,
+    step: _StepPlan,
     outcome: str,
     changes: dict[str, Any] | None,
     artifacts: ArtifactStore,
@@ -814,15 +604,17 @@ async def _troupes_turn(
     """troupe's turn at a run's gate, when its list starts with troupe: keep the changes, or pass
     and raise a cue (spec: gates; manual-gates design D3). A list that starts with a person had
     its cue recorded with the end."""
-    approvers = what.resolved_approvers()
+    approvers = step.approvers
     if (
         approvers is None
         or changes is None
+        # Before a flow's last step, the gate was settled with the step's end, or not reached.
+        or not step.position.last
         or not gate.reaches_gate(outcome, changes)
         or gate.first_is_a_person(approvers.value)
     ):
         return
-    patch = await asyncio.to_thread(artifacts.read, changes["diff"])
+    patch = await asyncio.to_thread(artifacts.read, landing(changes))
     await asyncio.to_thread(
         gate.troupes_step, store, theatre, patch, run_id, approvers.value, person, announce
     )

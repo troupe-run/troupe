@@ -10,7 +10,8 @@
       "required": [
         "kind",
         "performanceId",
-        "performed"
+        "performed",
+        "steps"
       ],
       "properties": {
         "kind": {
@@ -20,7 +21,7 @@
           "$ref": "../lineage.schema.json#/$defs/performanceId"
         },
         "performed": {
-          "description": "What the performance performs. Until flows, always an actor, by its name.",
+          "description": "What the performance performs: an actor or a flow, by its name.",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -29,12 +30,20 @@
           ],
           "properties": {
             "kind": {
-              "const": "actor"
+              "enum": [
+                "actor",
+                "flow"
+              ]
             },
             "name": {
               "$ref": "run.schema.json#/$defs/actorName"
             }
           }
+        },
+        "steps": {
+          "description": "How many steps the performance has: one for an actor, a flow's number of steps.",
+          "type": "integer",
+          "minimum": 1
         }
       }
     },
@@ -45,7 +54,8 @@
         "kind",
         "runId",
         "performanceId",
-        "step"
+        "step",
+        "actor"
       ],
       "properties": {
         "kind": {
@@ -62,6 +72,10 @@
           "description": "The run's step in its performance, counting from 1.",
           "type": "integer",
           "minimum": 1
+        },
+        "actor": {
+          "description": "The actor the step runs.",
+          "$ref": "run.schema.json#/$defs/actorName"
         },
         "worktree": {
           "description": "The run's worktree, relative to the theatre, where it works. Absent: the run works in the theatre.",

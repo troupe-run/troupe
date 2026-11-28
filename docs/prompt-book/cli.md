@@ -55,12 +55,12 @@ Every command but `init` runs in a **theatre**: the nearest directory, from wher
   config, hooks or pushes the run made stay.
 - **`troupe config set`**, **`config unset`** and **`config get`** change and show config. Each change is recorded
   with who made it and why (`--reason`), and troupe writes the files under `.troupe/` from config.
-- **`troupe config mv`** renames a whole actor or runtime, such as `troupe config mv actors.tester actors.qa`, as one
-  change. Its files move as they are, a runtime's actors are pointed at its new name in the same change, and changes
-  made to the old name on another branch follow it when the branches merge. It's refused for anything but a whole
-  actor or runtime, a name config doesn't hold, a new name config already holds, and a built-in runtime's name. If
-  you've already moved the files by hand, it records the rename and writes only what the rename changes: a runtime's
-  actors' `runtime` lines.
+- **`troupe config mv`** renames a whole actor, runtime or flow, such as `troupe config mv actors.tester actors.qa`,
+  as one change. Its files move as they are, a runtime's actors and an actor's flows are pointed at its new name in
+  the same change, and changes made to the old name on another branch follow it when the branches merge. It's refused
+  for anything but a whole actor, runtime or flow, a name config doesn't hold, a new name config already holds, and a
+  built-in runtime's name. If you've already moved the files by hand, it records the rename and writes only what the
+  rename changes: a runtime's actors' `runtime` lines, or an actor's flows' steps.
 - **`troupe sync`** records your hand edits to the config files, each as a change by an unknown author, then makes
   every file say what config says. Every command that uses config does it first. `--rehearse` shows what it would
   record and write; `--force` replaces a file troupe can't read as config, keeping a copy.

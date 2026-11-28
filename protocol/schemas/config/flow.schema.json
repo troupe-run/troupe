@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://troupe.run/protocol/config/flow.schema.json",
+  "title": "Flow",
+  "description": "One flow's config file, .troupe/flows/<name>.yaml: actors performed one after another as one performance, each step building on the work before it. The file's name is the flow's name, which no actor may share. troupe writes this file from the theatre's config events, and every field is set with troupe config set.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "steps"
+  ],
+  "properties": {
+    "$schema": {
+      "title": "Schema",
+      "description": "Where this file's schema is, so editors can check it. troupe writes it.",
+      "type": "string",
+      "pattern": "(^|/)config/flow\\.schema\\.json$"
+    },
+    "steps": {
+      "title": "Steps",
+      "description": "The flow's steps, in the order they run. Each names an actor config defines that works in its own worktree. The same actor may appear more than once.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/step"
+      }
+    }
+  },
+  "$defs": {
+    "step": {
+      "title": "Step",
+      "description": "One step of a flow.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actor"
+      ],
+      "properties": {
+        "actor": {
+          "title": "Actor",
+          "description": "The actor this step runs, by its name in config.",
+          "$ref": "../client/run.schema.json#/$defs/actorName"
+        },
+        "direction": {
+          "title": "Direction",
+          "description": "What this step is asked to do, added after the performance's own direction. Absent: the step is told the performance's direction and the step before's brief only.",
+          "type": "string",
+          "minLength": 1
+        },
+        "approvers": {
+          "title": "Approvers",
+          "description": "Who may let this step's work through, by the same rules as an actor's approvers. Absent: the actor's approvers, else troupe, then director.",
+          "$ref": "actor.schema.json#/properties/approvers"
+        }
+      }
+    }
+  }
+}

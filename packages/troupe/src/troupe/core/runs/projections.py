@@ -26,6 +26,7 @@ from troupe.core import strict_json
 from troupe.core.client import messages as m
 from troupe.core.runs.aggregate import (
     CHANGES_ACCEPTED,
+    CHANGES_APPROVED,
     CHANGES_DISCARDED,
     CHANGES_REJECTED,
     CUE_RAISED,
@@ -137,11 +138,17 @@ class RunView:
         elif recording.topic == CUE_RAISED:
             self.cue = {"role": state["role"], "raisedAt": _at(recording)}
             self.gate.append({"step": "cue", "role": state["role"], "at": _at(recording)})
-        elif recording.topic in (CHANGES_ACCEPTED, CHANGES_DISCARDED, CHANGES_REJECTED):
+        elif recording.topic in (
+            CHANGES_ACCEPTED,
+            CHANGES_DISCARDED,
+            CHANGES_REJECTED,
+            CHANGES_APPROVED,
+        ):
             self.settled = {
                 CHANGES_ACCEPTED: "accepted",
                 CHANGES_DISCARDED: "discarded",
                 CHANGES_REJECTED: "rejected",
+                CHANGES_APPROVED: "approved",
             }[recording.topic]
             self.settled_at = _at(recording)
             self.kept_files = state.get("files")
@@ -151,7 +158,7 @@ class RunView:
         """The gate's answer, when the settling event is one: an acceptance whose lineage carries
         an approval, or a rejection."""
         lineage = recording.lineage or {}
-        if recording.topic == CHANGES_ACCEPTED:
+        if recording.topic in (CHANGES_ACCEPTED, CHANGES_APPROVED):
             approvals = lineage.get("approvals") or []
             if not approvals:
                 return
@@ -197,7 +204,16 @@ class RunView:
         captured = self.captured or {}
         data: dict[str, Any] = {
             key: captured[key]
-            for key in ("diff", "added", "modified", "deleted", "leftOut", "shared", "error")
+            for key in (
+                "diff",
+                "sofar",
+                "added",
+                "modified",
+                "deleted",
+                "leftOut",
+                "shared",
+                "error",
+            )
             if key in captured
         }
         if self.settled is not None:
@@ -213,7 +229,8 @@ class RunView:
         elif self.captured is None or "error" in captured:
             data["state"] = "uncaptured"
         else:
-            data["state"] = "pending" if "diff" in captured else "none"
+            has_work = "diff" in captured or "sofar" in captured
+            data["state"] = "pending" if has_work else "none"
         return data
 
     @property

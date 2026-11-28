@@ -365,3 +365,44 @@ def test_the_error_catalogue_is_what_an_ended_runs_error_validates_against() -> 
     ended = load(SCHEMAS / "events" / "run-ended.schema.json")
     assert ended["properties"]["outcome"]["properties"]["error"]["$ref"] == "../error.schema.json"
     assert "run.error-result" in branches("error.schema.json")
+
+
+# Requirement: Each step works on the steps before it (spec: flows; design D3, D4 of
+# actor-sequences: a step's sofar diff, and the run it was built on)
+
+
+@pytest.mark.parametrize(
+    ("changes", "valid"),
+    [
+        (
+            {
+                "added": 0,
+                "modified": 1,
+                "deleted": 0,
+                "leftOut": 0,
+                "diff": "sha256:" + "c" * 64,
+                "sofar": "sha256:" + "d" * 64,
+            },
+            True,
+        ),
+        (
+            {"added": 0, "modified": 0, "deleted": 0, "leftOut": 0, "sofar": "sha256:" + "d" * 64},
+            True,
+        ),
+        ({"added": 0, "modified": 0, "deleted": 0, "leftOut": 0, "sofar": "not a hash"}, False),
+    ],
+    ids=["its own diff and the work so far", "the work so far alone", "a sofar that isn't a ref"],
+)
+def test_an_ends_changes_may_carry_the_performances_diff_so_far(
+    changes: dict[str, Any], valid: bool
+) -> None:
+    ended = load(SCHEMAS / "events" / "run-ended.schema.json")
+    state = {**_ended({"audit": {"outside": []}}), "changes": changes}
+    assert validator_for(ended["$id"], SCRIPTED).is_valid(state) is valid
+
+
+def test_a_worktree_workspace_may_name_the_run_it_was_built_on() -> None:
+    started = load(SCHEMAS / "events" / "run-started.schema.json")
+    workspace = started["$defs"]["worktreeWorkspace"]
+    assert workspace["properties"]["builtOn"]["$ref"].endswith("#/$defs/runId")
+    assert "builtOn" not in workspace["required"]

@@ -21,7 +21,7 @@ adapter's own timeouts.
 import contextlib
 import threading
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -105,8 +105,10 @@ class Planned:
     differing: frozenset[str]
     dirty: tuple[str, ...]
 
-    def record(self, theatre: Path) -> dict[str, Any]:
-        """The workspace as the run's start records it, before any part of it exists."""
+    def record(self, theatre: Path, built_on: str | None = None) -> dict[str, Any]:
+        """The workspace as the run's start records it, before any part of it exists. A flow's
+        step after the first names the run whose work so far it's built on (actor-sequences
+        design D3)."""
         data: dict[str, Any] = {
             "kind": "worktree",
             "path": relative(theatre, self.path),
@@ -115,6 +117,8 @@ class Planned:
         }
         if self.prefix:
             data["prefix"] = self.prefix
+        if built_on is not None:
+            data["builtOn"] = built_on
         return data
 
 
@@ -128,6 +132,10 @@ class Worktree:
     clones: tuple[str, ...]
     baseline: str
     """The worktree's starting tree, as the VCS sees it, which the run's diff is taken from."""
+    own_baseline: str | None = None
+    """For a flow's step after the first, the tree the worktree holds once the performance's
+    diff so far is applied: the step's own diff is taken from it (actor-sequences design D3).
+    Not the run it was built on, which its start records as builtOn."""
 
     @property
     def cwd(self) -> Path:
@@ -169,6 +177,16 @@ def make_worktree(vcs: Vcs, planned: Planned, announce: Announce) -> Worktree:
             vcs.remove_worktree(path)
         raise
     return Worktree(path, planned.base, planned.prefix, filled.mechanisms, filled.baseline)
+
+
+def build_on(vcs: Vcs, worktree: Worktree, diff: Path, announce: Announce) -> Worktree:
+    """``worktree`` with the performance's diff so far (the file ``diff``) applied inside it, all
+    or nothing, so a flow's step starts from the work before it (actor-sequences design D3)."""
+    with announced(
+        "building the step on the work so far", announce, defaults.WORKSPACE_ANNOUNCE_AFTER_SECONDS
+    ):
+        built = vcs.apply_in_worktree(worktree.path, diff)
+    return replace(worktree, own_baseline=built)
 
 
 def _uncommitted(dirty: tuple[str, ...], base: str) -> Notice:
@@ -229,19 +247,25 @@ def capture(
     announce: Announce,
 ) -> dict[str, Any]:
     """The run's changes as its end records them: the diff stored as an artifact, with its
-    counts, or the error that stopped the capture. The worktree is kept either way."""
+    counts, or the error that stopped the capture. The worktree is kept either way. A flow's step
+    built on the work before it diffs only its own changes, and records the performance's diff so
+    far beside them as ``sofar`` (actor-sequences design D4)."""
     out = worktree.path.parent / f"{worktree.path.name}.diff"
+    leave_out = (f"{worktree.prefix}.troupe",)
     data: dict[str, Any]
     try:
         with announced(
             "capturing the run's changes", announce, defaults.WORKSPACE_ANNOUNCE_AFTER_SECONDS
         ):
-            captured = vcs.capture(
-                worktree.path, worktree.base, (f"{worktree.prefix}.troupe",), out
-            )
+            own = worktree.own_baseline if worktree.own_baseline is not None else worktree.base
+            captured = vcs.capture(worktree.path, own, leave_out, out)
             data = _counts(captured)
             if not captured.empty:
                 data["diff"] = _store(out, artifacts)
+            if worktree.own_baseline is not None:
+                sofar = vcs.capture(worktree.path, worktree.base, leave_out, out)
+                if not sofar.empty:
+                    data["sofar"] = _store(out, artifacts)
     except TroupeError as error:
         data = {"error": error.to_data()}
     finally:

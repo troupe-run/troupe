@@ -1,8 +1,8 @@
-"""Renaming an actor or runtime: what a rename may do, the files it moves, and the hand moves a
-sweep pairs (spec: config-renames, "Only a whole actor or runtime can be renamed", "A rename needs
-its source and refuses an existing target", "A built-in runtime's name is never renamed to or from";
-config-hand-edits, "A hand move with the same values is a rename", "An ambiguous hand move is
-refused"; config-mv design D5, D6, D7)."""
+"""Renaming an actor, runtime or flow: what a rename may do, the files it moves, and the hand moves
+a sweep pairs (spec: config-renames, "Only a whole actor or runtime can be renamed", "A rename
+needs its source and refuses an existing target", "A built-in runtime's name is never renamed to
+or from"; config-hand-edits, "A hand move with the same values is a rename", "An ambiguous hand
+move is refused"; config-mv design D5, D6, D7)."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -14,9 +14,11 @@ from troupe.core.config.changes import RENAMED_FROM, Rename, get, is_rename, val
 from troupe.core.config.kinds import (
     ACTORS,
     CHARACTER,
+    FLOWS,
     KINDS,
     RUNTIMES,
     actor_files,
+    flow_file,
     runtime_file,
 )
 from troupe.core.config_paths import shown
@@ -41,17 +43,18 @@ def renames(operations: Sequence[Operation]) -> list[tuple[tuple[str, ...], tupl
 
 def refuse_move(config: Mapping[str, Any], path: Sequence[str], source: Sequence[str]) -> None:
     """Refuse, recording nothing, a rename of ``source`` to ``path`` in ``config`` that isn't a
-    whole actor or runtime to a free name of its kind, or that names a built-in runtime."""
+    whole actor, runtime or flow to a free name of its kind, or that names a built-in runtime."""
     new, old = tuple(path), tuple(source)
     details = {"path": list(new), "from": list(old)}
     if len(new) != 2 or len(old) != 2 or old[0] not in KINDS or new[0] not in KINDS:
         raise TroupeError(
             "config.move-not-entity",
-            problem=f"troupe config mv renames a whole actor or runtime, and {shown(old)} to "
-            f"{shown(new)} isn't one: only actors.<name> and runtimes.<name> can be renamed.",
-            fix="Name the actor or runtime itself, such as troupe config mv actors.tester "
+            problem=f"troupe config mv renames a whole actor, runtime or flow, and {shown(old)} to "
+            f"{shown(new)} isn't one: only actors.<name>, runtimes.<name> and flows.<name> can be "
+            "renamed.",
+            fix="Name the actor, runtime or flow itself, such as troupe config mv actors.tester "
             "actors.qa; to change a value, use troupe config set.",
-            details={**details, "rule": "only a whole actor or runtime can be renamed"},
+            details={**details, "rule": "only a whole actor, runtime or flow can be renamed"},
         )
     if old[0] != new[0]:
         raise TroupeError(
@@ -91,12 +94,14 @@ def refuse_move(config: Mapping[str, Any], path: Sequence[str], source: Sequence
 
 
 def _a(kind: str) -> str:
-    return "an actor" if kind == ACTORS else "a runtime"
+    return {ACTORS: "an actor", FLOWS: "a flow"}.get(kind, "a runtime")
 
 
 def files_of(kind: str, name: str) -> tuple[str, ...]:
     """The config files an entity has, relative to .troupe/."""
-    return actor_files(name) if kind == ACTORS else (runtime_file(name),)
+    if kind == ACTORS:
+        return actor_files(name)
+    return (flow_file(name),) if kind == FLOWS else (runtime_file(name),)
 
 
 def moved_files(entries: Sequence[Mapping[str, Any]]) -> dict[str, str]:
@@ -114,7 +119,8 @@ def moved_files(entries: Sequence[Mapping[str, Any]]) -> dict[str, str]:
 
 def already_moved(troupe_dir: Path, path: Sequence[str], source: Sequence[str]) -> bool:
     """Whether a person has already moved ``source``'s files to ``path``'s names by hand: none of
-    the old files is there, and the new main file (an actor's .yaml, a runtime's file) is."""
+    the old files is there, and the new main file (an actor's .yaml, a runtime's or a flow's
+    file) is."""
     if len(path) != 2 or len(source) != 2 or path[0] not in KINDS or source[0] != path[0]:
         return False
     old = files_of(source[0], source[1])

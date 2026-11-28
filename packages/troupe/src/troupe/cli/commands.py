@@ -84,6 +84,22 @@ def _text(summary: dict[str, Any] | None) -> str:
 
 
 def _render_rehearsal(rehearsal: dict[str, Any], stdout: TextIO) -> None:
+    if "steps" in rehearsal:
+        # A flow: every step, each as its run would start (spec: flows, "Performing a flow runs
+        # its steps in order").
+        steps = rehearsal["steps"]
+        lines = [f"would perform the flow {rehearsal['flow']}, {len(steps)} steps"]
+        for index, step in enumerate(steps, start=1):
+            block = _rehearsal_lines(step)
+            lines.append(f"step {index}/{len(steps)}: {block[0]}")
+            lines += ["  " + line for line in block[1:]]
+    else:
+        lines = _rehearsal_lines(rehearsal)
+    lines.append("Rehearsal: nothing was started or recorded.")
+    print("\n".join(lines), file=stdout)
+
+
+def _rehearsal_lines(rehearsal: dict[str, Any]) -> list[str]:
     check = rehearsal["effectCheck"]
     expect = ", ".join(check["paths"]) if check["kind"] == "files" else "no effect check"
     stage = rehearsal["stage"]
@@ -103,8 +119,7 @@ def _render_rehearsal(rehearsal: dict[str, Any], stdout: TextIO) -> None:
     if "approvers" in rehearsal:
         approvers = rehearsal["approvers"]
         lines.append(f"  approvers: {', '.join(approvers['value'])} ({approvers['source']})")
-    lines.append("Rehearsal: nothing was started or recorded.")
-    print("\n".join(lines), file=stdout)
+    return lines
 
 
 def _effects(effects: dict[str, list[str]]) -> str:
@@ -184,18 +199,30 @@ def run_perform(arguments: argparse.Namespace, stdout: TextIO, stderr: TextIO) -
     if arguments.rehearse:
         params["rehearse"] = True
 
+    steps = {"total": 1}
+
     def on_update(update: dict[str, Any]) -> None:
         if update["kind"] == "performance-started":
-            performed = update["performed"]
+            performed, steps["total"] = update["performed"], update["steps"]
+            shown = performed["name"]
+            if performed["kind"] == "flow":
+                shown += f", {update['steps']} step" + ("" if update["steps"] == 1 else "s")
             print(
-                f"troupe: performance {update['performanceId']} ({performed['name']}) starting",
+                f"troupe: performance {update['performanceId']} ({shown}) starting",
                 file=stderr,
                 flush=True,
             )
         elif update["kind"] == "started":
             run_id = update["runId"]
+            # A flow's step is named by its place and actor (spec: flows, "Perform names each step
+            # as it starts"); a single run's line is as it was.
+            step = (
+                f"step {update['step']}/{steps['total']} {update['actor']}: "
+                if steps["total"] > 1
+                else ""
+            )
             print(
-                f"troupe: run {run_id} starting; follow it from another terminal with "
+                f"troupe: {step}run {run_id} starting; follow it from another terminal with "
                 f"`troupe logs {run_id[:8]} --follow`",
                 file=stderr,
                 flush=True,

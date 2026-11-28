@@ -19,7 +19,7 @@ from event_schemas import HASH, LINEAGE, ULID
 from protocol_schemas import PROTOCOL_BASE, SCRIPTED, validator_for
 from runtesting import INIT, OK, script
 from troupe.core.config.base import StrictModel
-from troupe.core.config.models import Actor, ConfigChanged, Runtime
+from troupe.core.config.models import Actor, ConfigChanged, Flow, Runtime
 
 ACTOR_URI = PROTOCOL_BASE + "config/actor.schema.json"
 ACTOR = validator_for(ACTOR_URI, SCRIPTED)
@@ -138,6 +138,54 @@ def test_the_runtime_schema_accepts(value: dict[str, Any]) -> None:
 )
 def test_the_runtime_schema_refuses(value: dict[str, Any]) -> None:
     assert not RUNTIME.is_valid(value)
+
+
+# Requirement: A flow is a config kind of its own (spec: flows)
+
+FLOW = validator_for(PROTOCOL_BASE + "config/flow.schema.json")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param({"steps": [{"actor": "writer"}]}, id="one step"),
+        pytest.param(
+            {
+                "$schema": "https://troupe.run/protocol/0/config/flow.schema.json",
+                "steps": [
+                    {"actor": "writer"},
+                    {"actor": "reviewer", "direction": "review it", "approvers": ["director"]},
+                    {"actor": "writer"},
+                ],
+            },
+            id="three steps, one actor twice, a direction and approvers",
+        ),
+    ],
+)
+def test_the_flow_schema_accepts(value: dict[str, Any]) -> None:
+    FLOW.validate(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param({}, id="no steps"),
+        pytest.param({"steps": []}, id="an empty step list"),
+        pytest.param({"steps": [{}]}, id="a step with no actor"),
+        pytest.param({"steps": [{"actor": "Writer"}]}, id="an actor name that doesn't fit"),
+        pytest.param({"steps": [{"actor": "writer", "direction": ""}]}, id="an empty direction"),
+        pytest.param({"steps": [{"actor": "writer", "approvers": ["ada"]}]}, id="an unknown role"),
+        pytest.param(
+            {"steps": [{"actor": "writer", "approvers": "director"}]}, id="approvers not a list"
+        ),
+        pytest.param(
+            {"steps": [{"actor": "writer", "runner": "scripted"}]}, id="an unknown step field"
+        ),
+        pytest.param({"steps": [{"actor": "writer"}], "parallel": True}, id="an unknown field"),
+    ],
+)
+def test_the_flow_schema_refuses(value: dict[str, Any]) -> None:
+    assert not FLOW.is_valid(value)
 
 
 def test_without_a_runner_bound_only_empty_options_validate() -> None:
@@ -417,6 +465,22 @@ def test_the_actor_model_accepts_exactly_what_its_schema_accepts(value: dict[str
 @example({"credential": {"env": "troupe_x"}})
 def test_the_runtime_model_accepts_exactly_what_its_schema_accepts(value: dict[str, Any]) -> None:
     assert _accepts(Runtime, value) == _bundled("Runtime").is_valid(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"steps": [{"actor": "writer"}]},
+        {"steps": []},
+        {"steps": [{"actor": "writer", "approvers": ["director"], "direction": "d"}]},
+        {"steps": [{"actor": "writer", "approvers": ["ada"]}]},
+        {"steps": [{"actor": "w\n"}]},
+        {"steps": [{"actor": "writer", "direction": ""}]},
+        {"steps": [{"actor": "writer", "x": 1}]},
+    ],
+)
+def test_the_flow_model_accepts_exactly_what_its_schema_accepts(value: dict[str, Any]) -> None:
+    assert _accepts(Flow, value) == _bundled("Flow").is_valid(value)
 
 
 @given(changes())

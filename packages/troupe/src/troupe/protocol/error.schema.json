@@ -2421,6 +2421,7 @@
             },
             "settled": {
               "enum": [
+                "approved",
                 "accepted",
                 "discarded",
                 "rejected"
@@ -2496,6 +2497,7 @@
               "enum": [
                 "pending",
                 "waiting",
+                "approved",
                 "accepted",
                 "discarded",
                 "rejected",

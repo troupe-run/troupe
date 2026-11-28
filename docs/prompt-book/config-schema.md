@@ -43,6 +43,15 @@ One actor's config file, .troupe/actors/<name>.yaml. The file's name is the acto
 | `runtime` | string | No | The runtime this actor's runs talk to, by name: one of troupe's built-in runtimes or one in config. Only for a runner that takes a runtime; required by one that needs it. |
 | `model` | string | No | The model this actor's runs use. It overrides the person's TROUPE_RUNTIME_<NAME>_MODEL, which overrides the runtime's model in config. Only with a runtime. |
 
+### Flow
+
+One flow's config file, .troupe/flows/<name>.yaml: actors performed one after another as one performance, each step building on the work before it. The file's name is the flow's name, which no actor may share. troupe writes this file from the theatre's config events, and every field is set with troupe config set.
+
+| Field | Holds | Always there | What it is |
+|---|---|---|---|
+| `$schema` | string | No | Where this file's schema is, so editors can check it. troupe writes it. |
+| `steps` | list of object (Step) | Yes | The flow's steps, in the order they run. Each names an actor config defines that works in its own worktree. The same actor may appear more than once. |
+
 ### Runtime
 
 One runtime's config file, .troupe/runtimes/<name>.yaml: a service a runner talks to. The file's name is the runtime's name. It holds only what the theatre's config sets: a built-in runtime's other fields are troupe's defaults, and the person's environment overrides any of them (TROUPE_RUNTIME_<NAME>_ENDPOINT, _MODEL, _CREDENTIAL_ENV, _ENGINE). troupe writes this file from the theatre's config events, and every field is set with troupe config set.
