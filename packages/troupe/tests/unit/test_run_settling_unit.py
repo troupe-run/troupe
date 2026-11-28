@@ -15,7 +15,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from runtesting import STAGE, outcome
+from runtesting import PERFORMANCE, STAGE, outcome
 from storetesting import ADA, Counter
 from troupe.core.artifacts import MemoryArtifactStore
 from troupe.core.client import messages as m
@@ -121,6 +121,7 @@ class Theatre:
             config=["sha256:" + "b" * 64],
             workspace=workspace,
             on_context_full={"value": "fail", "source": "default"},
+            step=1,
             approvers=(
                 {"value": ["troupe", "director"], "source": "default"}
                 if kind == "worktree"
@@ -141,7 +142,7 @@ class Theatre:
         return made
 
     def record(self, run: Run) -> None:
-        self.store.command(via="cli").record(run.collect_events())
+        self.store.command(via="cli", performance=PERFORMANCE).record(run.collect_events())
 
     def call(self, command: Callable[..., Any], request: Message) -> Any:  # noqa: ANN401
         session = Session(theatre=self.path, env=dict(ADA))
@@ -499,6 +500,7 @@ def test_a_settling_approved_in_a_role_carries_that_approval(theatre: Theatre) -
         run.run_id,
         "approved",
         lambda r: r.accept_changes(diff, ["a.txt"], approved_as="director"),
+        performance=PERFORMANCE,
         approved_as="director",
     )
     accepted = theatre.last(run)
@@ -512,7 +514,12 @@ def test_a_settling_recorded_as_a_given_command_is_that_commands(theatre: Theatr
     run = theatre.run()
     command = theatre.store.command(via="server", reason="kept at the gate")
     changes.record_settling(
-        theatre.store, run.run_id, "ignored", lambda r: r.discard_changes(), command=command
+        theatre.store,
+        run.run_id,
+        "ignored",
+        lambda r: r.discard_changes(),
+        performance=PERFORMANCE,
+        command=command,
     )
     discarded = theatre.last(run)
     assert discarded.lineage["via"] == "server"
@@ -524,7 +531,9 @@ def test_settling_a_stream_that_isnt_a_run_is_a_type_error(theatre: Theatre) -> 
     theatre.store.command(via="cli").record(counter.collect_events())
     stream = str(counter.id)
     with pytest.raises(TypeError, match=f"run {stream}'s stream doesn't hold a run"):
-        changes.record_settling(theatre.store, stream, None, lambda r: None)
+        changes.record_settling(
+            theatre.store, stream, None, lambda r: None, performance=PERFORMANCE
+        )
 
 
 def test_a_settle_lock_an_earlier_settling_left_is_reused(theatre: Theatre) -> None:
